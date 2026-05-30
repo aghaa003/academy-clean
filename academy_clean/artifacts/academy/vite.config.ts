@@ -24,20 +24,17 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port,
-    strictPort: false,
-    host: "0.0.0.0",
-    allowedHosts: true,
-    fs: {
-      strict: false,
+  proxy: {
+    "/api": {
+      target: "http://localhost:8000",
+      changeOrigin: true,
     },
-    proxy: {
-      "/api": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-      },
+    "/sanctum": { 
+      target: "http://localhost:8000",
+      changeOrigin: true,
     },
   },
+},
   preview: {
     port,
     host: "0.0.0.0",

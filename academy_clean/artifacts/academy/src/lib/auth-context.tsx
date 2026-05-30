@@ -4,7 +4,6 @@ const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 // In development, Vite proxies /api to localhost:3000, so we use relative URLs.
 // In production or if VITE_API_URL is explicitly set, prepend it.
-const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 export interface CurrentUser {
   id: string;
@@ -74,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/auth/me`, { credentials: "include" });
+      const res = await fetch(`api/auth/me`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json() as { user: Parameters<typeof rawToUser>[0] };
         const nextUser = rawToUser(data.user);
@@ -95,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const signOut = useCallback(async () => {
-    await fetch(`${API}/api/auth/logout`, { method: "POST", credentials: "include" });
+    await fetch(`/api/auth/logout`, { method: "POST", credentials: "include" });
     setUser(null);
     window.location.href = BASE + "/sign-in";
   }, []);

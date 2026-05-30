@@ -19,7 +19,7 @@ if not exist "node_modules" (
 )
 
 :: Start both servers
-echo Starting backend on http://localhost:3000
+echo Starting backend on http://localhost:8000
 echo Starting frontend on http://localhost:5173
 echo.
 pnpm run dev

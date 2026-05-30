@@ -4,7 +4,6 @@ import { useCurrentUser } from "@/lib/auth-context";
 import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 const INPUT: React.CSSProperties = {
   width: "100%",
@@ -21,9 +20,17 @@ const INPUT: React.CSSProperties = {
   transition: "border-color 0.2s, box-shadow 0.2s",
 };
 
+function getCookie(name: string) {
+  return document.cookie
+    .split("; ")
+    .find(row => row.startsWith(name + "="))
+    ?.split("=")[1];
+}
+
 export default function SignUpPage() {
   const [firstName,  setFirstName]  = useState("");
   const [lastName,   setLastName]   = useState("");
+  const [username,   setUsername]   = useState("");
   const [email,      setEmail]      = useState("");
   const [password,   setPassword]   = useState("");
   const [confirmPw,  setConfirmPw]  = useState("");
@@ -49,35 +56,47 @@ export default function SignUpPage() {
     setError("");
 
     if (!firstName.trim())                     { setError("يرجى إدخال الاسم الأول."); return; }
+    if (!username.trim() || username.length < 3) { setError("يرجى إدخال اسم مستخدم (3 أحرف على الأقل)."); return; }
     if (!email.trim() || !email.includes("@")) { setError("يرجى إدخال بريد إلكتروني صحيح."); return; }
     if (!password)                             { setError("يرجى إدخال كلمة المرور."); return; }
+    if (password.length < 8)                   { setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل."); return; }
     if (password !== confirmPw)                { setError("كلمتا المرور غير متطابقتين."); return; }
 
     setLoading(true);
+
     try {
-      const res = await fetch(`${apiBase}/api/auth/register`, {
+      // 1. get CSRF cookie
+      await fetch("/sanctum/csrf-cookie", { credentials: "include" });
+
+      // 2. read the token from cookie
+      const xsrfToken = decodeURIComponent(getCookie("XSRF-TOKEN") ?? "");
+
+      // 3. send registration request with XSRF token header
+      const res = await fetch("/api/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-XSRF-TOKEN": xsrfToken,
+        },
         body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName:  lastName.trim() || undefined,
-          emailAddress: email.trim().toLowerCase(),
+          name: `${firstName} ${lastName}`,
+          username,
+          email,
           password,
         }),
+        credentials: "include",
       });
 
-      const data = await res.json() as { success?: boolean; user?: object; error?: string };
-
-      if (!res.ok || !data.success) {
-        setError(data.error ?? "حدث خطأ في إنشاء الحساب، يرجى المحاولة مجدداً.");
-        return;
+      if (res.ok) {
+        await refreshUser();
+        navigate("/");
+      } else {
+        const data = await res.json();
+        setError(data.message || "فشل التسجيل");
       }
-
-      await refreshUser();
-      navigate("/");
-    } catch {
-      setError("حدث خطأ في الاتصال، يرجى المحاولة مجدداً.");
+    } catch (err) {
+      setError("حدث خطأ في الاتصال بالسيرفر.");
     } finally {
       setLoading(false);
     }
@@ -126,6 +145,16 @@ export default function SignUpPage() {
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Username */}
+            <div style={{ position:"relative" }}>
+              <span style={{ position:"absolute", right:"12px", top:"50%", transform:"translateY(-50%)", color:"#94a3b8", pointerEvents:"none" }}><User size={15}/></span>
+              <input
+                type="text" placeholder="اسم المستخدم *" value={username} autoComplete="username"
+                onChange={e => setUsername(e.target.value)}
+                style={INPUT} onFocus={focus} onBlur={blur}
+              />
             </div>
 
             {/* Email */}

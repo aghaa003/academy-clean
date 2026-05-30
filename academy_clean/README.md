@@ -30,10 +30,11 @@ NODE_ENV=development
 ```
 
 Frontend config — `artifacts/academy/.env` is pre-configured for local dev:
+
 ```env
 PORT=5173
 BASE_PATH=/
-VITE_API_URL=http://localhost:3000
+VITE_API_URL=http://127.0.0.1:8000/api
 ```
 
 ### 3. Start MongoDB
@@ -50,11 +51,13 @@ Or use the MongoDB Compass GUI / Windows Service.
 ### 4. Run the app
 
 **Option A — Both frontend + backend at once:**
+
 ```bash
 pnpm run dev
 ```
 
 **Option B — Separately:**
+
 ```bash
 # Terminal 1 — Backend (port 3000)
 pnpm run dev:backend

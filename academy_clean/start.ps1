@@ -18,7 +18,7 @@ if (-not (Test-Path "node_modules")) {
 }
 
 Write-Host ""
-Write-Host "Starting backend  -> http://localhost:3000" -ForegroundColor Green
+Write-Host "Starting backend  -> http://localhost:8000" -ForegroundColor Green
 Write-Host "Starting frontend -> http://localhost:5173" -ForegroundColor Green
 Write-Host ""
 

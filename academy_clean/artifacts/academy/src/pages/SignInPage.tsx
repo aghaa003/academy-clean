@@ -4,7 +4,6 @@ import { useCurrentUser } from "@/lib/auth-context";
 import { User, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 const INPUT_STYLE: React.CSSProperties = {
   width: "100%",
@@ -31,41 +30,55 @@ export default function SignInPage() {
   const { refreshUser } = useCurrentUser();
   const [, navigate] = useLocation();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+ // في SignInPage.tsx داخل دالة handleSubmit
 
-    if (!email.trim())  { setError("يرجى إدخال البريد الإلكتروني."); return; }
-    if (!password)      { setError("يرجى إدخال كلمة المرور."); return; }
+// helper to read a cookie by name
+function getCookie(name: string) {
+  return document.cookie
+    .split("; ")
+    .find(row => row.startsWith(name + "="))
+    ?.split("=")[1];
+}
 
-    setLoading(true);
-    try {
-      const res = await fetch(`${apiBase}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          emailAddress: email.trim().toLowerCase(),
-          password,
-        }),
-      });
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  if (!email.trim())  { setError("يرجى إدخال البريد الإلكتروني."); return; }
+  if (!password)      { setError("يرجى إدخال كلمة المرور."); return; }
+  setLoading(true);
 
-      const data = await res.json() as { success?: boolean; user?: object; error?: string };
+  try {
+    // 1. get CSRF cookie
+    await fetch("/sanctum/csrf-cookie", { credentials: "include" });
 
-      if (!res.ok || !data.success) {
-        setError(data.error ?? "البريد الإلكتروني أو كلمة المرور غير صحيحة.");
-        return;
-      }
+    // 2. read the token from cookie
+    const xsrfToken = decodeURIComponent(getCookie("XSRF-TOKEN") ?? "");
 
+    // 3. send it as a header
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-XSRF-TOKEN": xsrfToken,   // ← this is what was missing
+      },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
+
+    if (res.ok) {
       await refreshUser();
       navigate("/");
-    } catch {
-      setError("حدث خطأ في الاتصال، يرجى المحاولة مجدداً.");
-    } finally {
-      setLoading(false);
+    } else {
+      const errorData = await res.json();
+      setError(errorData.message || "بيانات الدخول غير صحيحة.");
     }
-  };
-
+  } catch (err) {
+    setError("حدث خطأ في الاتصال بالسيرفر.");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div
       dir="rtl"
