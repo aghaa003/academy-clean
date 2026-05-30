@@ -1,0 +1,1059 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification for أكاديمية البرمجة المتكاملة
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: users
+    description: User management and profiles
+  - name: courses
+    description: Courses and lessons
+  - name: repositories
+    description: Project repositories
+  - name: challenges
+    description: Coding challenges
+  - name: reviews
+    description: Course reviews and ratings
+  - name: comments
+    description: Video comments
+  - name: search
+    description: Global search
+  - name: stats
+    description: Dashboard statistics
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Users ───────────────────────────────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users with ranking
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [user, creator, employer, admin]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create or upsert a user profile (called after Clerk auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user profile by ID
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user profile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [users]
+      summary: Get top-ranked users leaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  # ─── Courses ─────────────────────────────────────────────────────────────────
+  /courses:
+    get:
+      operationId: listCourses
+      tags: [courses]
+      summary: List all courses
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of courses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseListResponse"
+    post:
+      operationId: createCourse
+      tags: [courses]
+      summary: Create a new course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCourseBody"
+      responses:
+        "201":
+          description: Created course
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+
+  /courses/{courseId}:
+    get:
+      operationId: getCourse
+      tags: [courses]
+      summary: Get course details
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Course with lessons
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+
+  /courses/featured:
+    get:
+      operationId: getFeaturedCourses
+      tags: [courses]
+      summary: Get featured/top-rated courses for homepage
+      responses:
+        "200":
+          description: Featured courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+
+  /courses/{courseId}/lessons:
+    post:
+      operationId: createLesson
+      tags: [courses]
+      summary: Add a lesson to a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLessonBody"
+      responses:
+        "201":
+          description: Created lesson
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lesson"
+
+  # ─── Reviews ─────────────────────────────────────────────────────────────────
+  /courses/{courseId}/reviews:
+    get:
+      operationId: getCourseReviews
+      tags: [reviews]
+      summary: Get reviews for a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Course reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Submit a review for a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewBody"
+      responses:
+        "201":
+          description: Created review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  # ─── Repositories ────────────────────────────────────────────────────────────
+  /repositories:
+    get:
+      operationId: listRepositories
+      tags: [repositories]
+      summary: List public repositories
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of repositories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryListResponse"
+    post:
+      operationId: createRepository
+      tags: [repositories]
+      summary: Create a new repository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRepositoryBody"
+      responses:
+        "201":
+          description: Created repository
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repository"
+
+  /repositories/{repoId}:
+    get:
+      operationId: getRepository
+      tags: [repositories]
+      summary: Get repository details
+      parameters:
+        - name: repoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Repository details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repository"
+
+  /repositories/{repoId}/like:
+    post:
+      operationId: likeRepository
+      tags: [repositories]
+      summary: Like or unlike a repository
+      parameters:
+        - name: repoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LikeBody"
+      responses:
+        "200":
+          description: Like status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LikeResponse"
+
+  /repositories/featured:
+    get:
+      operationId: getFeaturedRepositories
+      tags: [repositories]
+      summary: Get top liked repositories for homepage showcase
+      responses:
+        "200":
+          description: Featured repositories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Repository"
+
+  # ─── Challenges ──────────────────────────────────────────────────────────────
+  /challenges:
+    get:
+      operationId: listChallenges
+      tags: [challenges]
+      summary: List coding challenges
+      parameters:
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of challenges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChallengeListResponse"
+    post:
+      operationId: createChallenge
+      tags: [challenges]
+      summary: Create a coding challenge (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChallengeBody"
+      responses:
+        "201":
+          description: Created challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Challenge"
+
+  /challenges/{challengeId}:
+    get:
+      operationId: getChallenge
+      tags: [challenges]
+      summary: Get challenge details
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Challenge details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Challenge"
+
+  /challenges/{challengeId}/submit:
+    post:
+      operationId: submitChallenge
+      tags: [challenges]
+      summary: Submit a challenge solution
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitChallengeBody"
+      responses:
+        "200":
+          description: Submission result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResult"
+
+  # ─── Search ──────────────────────────────────────────────────────────────────
+  /search:
+    get:
+      operationId: globalSearch
+      tags: [search]
+      summary: Global search across users, courses, repositories
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, users, courses, repositories, challenges]
+            default: all
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+
+  # ─── Stats ───────────────────────────────────────────────────────────────────
+  /stats/platform:
+    get:
+      operationId: getPlatformStats
+      tags: [stats]
+      summary: Get platform-wide statistics for homepage
+      responses:
+        "200":
+          description: Platform statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformStats"
+
+  /stats/user/{userId}:
+    get:
+      operationId: getUserStats
+      tags: [stats]
+      summary: Get statistics for a specific user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    # ─── User schemas ─────────────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        clerkId:
+          type: string
+        name:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: string
+        bio:
+          type: string
+        role:
+          type: string
+          enum: [user, creator, employer, admin]
+        points:
+          type: integer
+        globalRank:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, clerkId, name, username, email, role, points, createdAt]
+
+    UserProfile:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            solvedChallenges:
+              type: integer
+            totalCourses:
+              type: integer
+            totalRepositories:
+              type: integer
+            challengeCategories:
+              type: array
+              items:
+                type: object
+                properties:
+                  category:
+                    type: string
+                  count:
+                    type: integer
+                required: [category, count]
+          required: [solvedChallenges, totalCourses, totalRepositories, challengeCategories]
+
+    UserListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+      required: [users, total]
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        user:
+          $ref: "#/components/schemas/User"
+        points:
+          type: integer
+        solvedChallenges:
+          type: integer
+      required: [rank, user, points, solvedChallenges]
+
+    CreateUserBody:
+      type: object
+      properties:
+        clerkId:
+          type: string
+        name:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: string
+        role:
+          type: string
+          enum: [user, creator, employer, admin]
+          default: user
+      required: [clerkId, name, username, email]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        bio:
+          type: string
+        avatarUrl:
+          type: string
+
+    # ─── Course schemas ───────────────────────────────────────────────────────
+    Course:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        category:
+          type: string
+        level:
+          type: string
+          enum: [beginner, intermediate, advanced]
+        language:
+          type: string
+        creatorId:
+          type: string
+        creatorName:
+          type: string
+        creatorAvatar:
+          type: string
+        averageRating:
+          type: number
+        totalReviews:
+          type: integer
+        totalLessons:
+          type: integer
+        totalEnrollments:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, description, category, level, creatorId, creatorName, averageRating, totalReviews, totalLessons, createdAt]
+
+    CourseDetail:
+      allOf:
+        - $ref: "#/components/schemas/Course"
+        - type: object
+          properties:
+            lessons:
+              type: array
+              items:
+                $ref: "#/components/schemas/Lesson"
+          required: [lessons]
+
+    CourseListResponse:
+      type: object
+      properties:
+        courses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Course"
+        total:
+          type: integer
+      required: [courses, total]
+
+    CreateCourseBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        category:
+          type: string
+        level:
+          type: string
+          enum: [beginner, intermediate, advanced]
+        language:
+          type: string
+          default: ar
+        creatorId:
+          type: string
+      required: [title, description, category, level, creatorId]
+
+    Lesson:
+      type: object
+      properties:
+        id:
+          type: integer
+        courseId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        videoUrl:
+          type: string
+        duration:
+          type: integer
+        order:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, courseId, title, order, createdAt]
+
+    CreateLessonBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        videoUrl:
+          type: string
+        duration:
+          type: integer
+        order:
+          type: integer
+      required: [title, order]
+
+    # ─── Review schemas ───────────────────────────────────────────────────────
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+        courseId:
+          type: integer
+        userId:
+          type: string
+        userName:
+          type: string
+        userAvatar:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, courseId, userId, userName, rating, createdAt]
+
+    CreateReviewBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+      required: [userId, rating]
+
+    # ─── Repository schemas ───────────────────────────────────────────────────
+    Repository:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        ownerId:
+          type: string
+        ownerName:
+          type: string
+        ownerAvatar:
+          type: string
+        technologies:
+          type: array
+          items:
+            type: string
+        visibility:
+          type: string
+          enum: [public, private]
+        likesCount:
+          type: integer
+        projectUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, description, ownerId, ownerName, visibility, likesCount, technologies, createdAt]
+
+    RepositoryListResponse:
+      type: object
+      properties:
+        repositories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Repository"
+        total:
+          type: integer
+      required: [repositories, total]
+
+    CreateRepositoryBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        ownerId:
+          type: string
+        technologies:
+          type: array
+          items:
+            type: string
+        visibility:
+          type: string
+          enum: [public, private]
+          default: public
+        projectUrl:
+          type: string
+      required: [title, description, ownerId, technologies]
+
+    LikeBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        action:
+          type: string
+          enum: [like, unlike]
+      required: [userId, action]
+
+    LikeResponse:
+      type: object
+      properties:
+        liked:
+          type: boolean
+        likesCount:
+          type: integer
+      required: [liked, likesCount]
+
+    # ─── Challenge schemas ────────────────────────────────────────────────────
+    Challenge:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        category:
+          type: string
+        points:
+          type: integer
+        totalSubmissions:
+          type: integer
+        successRate:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, description, difficulty, category, points, totalSubmissions, successRate, createdAt]
+
+    ChallengeListResponse:
+      type: object
+      properties:
+        challenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/Challenge"
+        total:
+          type: integer
+      required: [challenges, total]
+
+    CreateChallengeBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        category:
+          type: string
+        points:
+          type: integer
+      required: [title, description, difficulty, category, points]
+
+    SubmitChallengeBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        solution:
+          type: string
+        language:
+          type: string
+      required: [userId, solution, language]
+
+    SubmissionResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        pointsEarned:
+          type: integer
+        message:
+          type: string
+      required: [success, pointsEarned, message]
+
+    # ─── Search schemas ───────────────────────────────────────────────────────
+    SearchResults:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        courses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Course"
+        repositories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Repository"
+        challenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/Challenge"
+      required: [users, courses, repositories, challenges]
+
+    # ─── Stats schemas ────────────────────────────────────────────────────────
+    PlatformStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalCourses:
+          type: integer
+        totalRepositories:
+          type: integer
+        totalChallenges:
+          type: integer
+        totalChallengesSolved:
+          type: integer
+      required: [totalUsers, totalCourses, totalRepositories, totalChallenges, totalChallengesSolved]
+
+    UserStats:
+      type: object
+      properties:
+        userId:
+          type: string
+        solvedChallenges:
+          type: integer
+        totalPoints:
+          type: integer
+        globalRank:
+          type: integer
+        coursesEnrolled:
+          type: integer
+        repositoriesCreated:
+          type: integer
+        categoriesBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              count:
+                type: integer
+            required: [category, count]
+      required: [userId, solvedChallenges, totalPoints, globalRank, coursesEnrolled, repositoriesCreated, categoriesBreakdown]
