@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await fetch(`api/auth/me`, { credentials: "include" });
+      const res = await fetch(`/api/auth/me`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json() as { user: Parameters<typeof rawToUser>[0] };
         const nextUser = rawToUser(data.user);
