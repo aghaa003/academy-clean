@@ -2,9 +2,6 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-// In development, Vite proxies /api to localhost:3000, so we use relative URLs.
-// In production or if VITE_API_URL is explicitly set, prepend it.
-
 export interface CurrentUser {
   id: string;
   firstName: string | null;
@@ -16,7 +13,15 @@ export interface CurrentUser {
   publicMetadata: Record<string, unknown>;
   createdAt: number;
   imageUrl: string;
+  avatar_url: string | null;
+  bio: string | null;
+  github_url: string | null;
+  linkedin_url: string | null;
+  website_url: string | null;
+  skills: string[] | null;
   role: "user" | "creator" | "admin";
+  points: number;
+  global_rank: number | null;
   profileVersion?: number;
 }
 
@@ -34,49 +39,47 @@ const AuthContext = createContext<AuthContextValue>({
   refreshUser: async () => {},
 });
 
-function rawToUser(raw: {
-  id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  fullName?: string | null;
-  email: string;
-  username?: string | null;
-  imageUrl?: string | null;
-  publicMetadata?: Record<string, unknown>;
-  createdAt?: number | null;
-  role?: string | null;
-  profileVersion?: number | null;
-}): CurrentUser {
-  const first = raw.firstName ?? null;
-  const last = raw.lastName ?? null;
-  const full = raw.fullName ?? ([first, last].filter(Boolean).join(" ") || null);
-  const username = raw.username ?? raw.email.split("@")[0] ?? null;
+function rawToUser(raw: any): CurrentUser {
+  const first = raw.firstName ?? raw.name?.split(" ")[0] ?? null;
+  const last  = raw.lastName  ?? raw.name?.split(" ").slice(1).join(" ") ?? null;
+const full  = raw.fullName  ?? raw.name ?? ([first, last].filter(Boolean).join(" ") || null);
   return {
-    id: raw.id,
-    firstName: first,
-    lastName: last,
-    fullName: full,
-    email: raw.email,
+    id:             raw.id,
+    firstName:      first,
+    lastName:       last,
+    fullName:       full,
+    email:          raw.email,
     emailAddresses: [{ emailAddress: raw.email }],
-    username,
+    username:       raw.username ?? raw.email?.split("@")[0] ?? null,
     publicMetadata: raw.publicMetadata ?? {},
-    createdAt: raw.createdAt ?? Date.now(),
-    imageUrl: raw.imageUrl ?? "",
-    role: (raw.role as "user" | "creator" | "admin") ?? "user",
+    createdAt:      raw.createdAt ?? Date.now(),
+    // ✅ Fix 4: map imageUrl from either imageUrl or avatar_url
+    imageUrl:       raw.imageUrl ?? raw.avatar_url ?? "",
+    avatar_url:     raw.avatar_url ?? null,
+    bio:            raw.bio ?? null,
+    github_url:     raw.github_url ?? null,
+    linkedin_url:   raw.linkedin_url ?? null,
+    website_url:    raw.website_url ?? null,
+    skills:         raw.skills ?? null,
+    role:           (raw.role as "user" | "creator" | "admin") ?? "user",
+    points:         raw.points ?? 0,
+    global_rank:    raw.global_rank ?? null,
     profileVersion: raw.profileVersion ?? 0,
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [user, setUser]       = useState<CurrentUser | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const refreshUser = useCallback(async () => {
     try {
       const res = await fetch(`/api/auth/me`, { credentials: "include" });
       if (res.ok) {
-        const data = await res.json() as { user: Parameters<typeof rawToUser>[0] };
-        const nextUser = rawToUser(data.user);
+        const data = await res.json();
+        // ✅ Fix 1: handle both { user: {...} } and flat {...} shapes
+        const raw      = data.user ?? data;
+        const nextUser = rawToUser(raw);
         setUser(nextUser);
         window.dispatchEvent(new CustomEvent("academy:user-updated", { detail: nextUser }));
       } else {
@@ -94,7 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const signOut = useCallback(async () => {
-    await fetch(`/api/auth/logout`, { method: "POST", credentials: "include" });
+    // ✅ Fix 2: correct logout URL
+    await fetch(`/api/logout`, { method: "POST", credentials: "include" });
     setUser(null);
     window.location.href = BASE + "/sign-in";
   }, []);
