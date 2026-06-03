@@ -283,6 +283,17 @@ export default function AdminPage() {
     );
   }
 
+  if (user?.role !== "admin") {
+    return (
+      <div className="min-h-screen flex flex-col" dir="rtl">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          غير مصرح — هذه الصفحة للمسؤولين فقط.
+        </div>
+      </div>
+    );
+  }
+
   const updateLesson = (id: string, patch: Partial<LessonDraft>) => {
     setLessons((prev) => prev.map((l) => l.id === id ? { ...l, ...patch } : l));
   };
@@ -294,10 +305,11 @@ export default function AdminPage() {
     }));
   };
 
-  const handleSetRole = async (userId: string, role: "user" | "creator" | "admin") => {
+  const handleSetRole = async (userId: string, role: "user" | "creator" | "employer" | "admin") => {
     await fetch(`/api/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ role }),
     });
     refetchUsers();

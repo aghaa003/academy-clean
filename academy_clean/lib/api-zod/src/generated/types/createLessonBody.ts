@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface CreateLessonBody {
+  title: string;
+  description?: string;
+  videoUrl?: string;
+  duration?: number;
+  order: number;
 }

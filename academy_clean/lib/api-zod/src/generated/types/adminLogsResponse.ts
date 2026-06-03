@@ -5,7 +5,9 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminLogsResponseLogsItem } from './adminLogsResponseLogsItem';
 
-export interface HealthStatus {
-  status: string;
+export interface AdminLogsResponse {
+  logs?: AdminLogsResponseLogsItem[];
+  total?: number;
 }

@@ -26,6 +26,8 @@ tags:
     description: Global search
   - name: stats
     description: Dashboard statistics
+  - name: admin
+    description: Admin and employer moderation (Laravel)
 
 paths:
   /healthz:
@@ -150,6 +152,64 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LeaderboardEntry"
+
+  /users/points:
+    post:
+      operationId: addUserPoints
+      tags: [users]
+      summary: Add points to the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [points]
+              properties:
+                points:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Points updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  totalPoints:
+                    type: integer
+
+  /users/profile:
+    get:
+      operationId: getMyProfile
+      tags: [users]
+      summary: Get authenticated user profile
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    post:
+      operationId: updateMyProfile
+      tags: [users]
+      summary: Update authenticated user profile (SPA ProfilePage)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMyProfileBody"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateMyProfileResponse"
 
   # ─── Courses ─────────────────────────────────────────────────────────────────
   /courses:
@@ -301,6 +361,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/Review"
 
+  /courses/{courseId}/reviews/{reviewId}:
+    delete:
+      operationId: deleteCourseReview
+      tags: [reviews]
+      summary: Delete a course review (course creator only)
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Review deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # ─── Repositories ────────────────────────────────────────────────────────────
   /repositories:
     get:
@@ -365,6 +449,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Repository"
+    delete:
+      operationId: deleteRepository
+      tags: [repositories]
+      summary: Delete a repository (owner or admin)
+      parameters:
+        - name: repoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 
   /repositories/{repoId}/like:
     post:
@@ -560,6 +661,181 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserStats"
 
+  /lessons/{lessonId}/likes:
+    get:
+      operationId: getLessonLikes
+      tags: [comments]
+      summary: Get lesson like count and whether current user liked
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Like state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonLikesResponse"
+
+  /admin/logs:
+    get:
+      operationId: getAdminLogs
+      tags: [admin]
+      summary: Login activity logs (admin)
+      responses:
+        "200":
+          description: Logs list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLogsResponse"
+
+  /admin/engagements:
+    get:
+      operationId: getAdminEngagements
+      tags: [admin]
+      summary: Lesson comments and likes feed (admin)
+      responses:
+        "200":
+          description: Engagements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEngagementsResponse"
+
+  /admin/comments:
+    get:
+      operationId: getAdminComments
+      tags: [admin]
+      summary: Comments for moderation (admin)
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCommentsResponse"
+
+  /admin/comments/{commentId}:
+    delete:
+      operationId: deleteAdminComment
+      tags: [admin]
+      summary: Delete lesson or community comment by id (admin)
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/reviews:
+    get:
+      operationId: getAdminReviews
+      tags: [admin]
+      summary: Reviews for moderation (admin or employer)
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReviewsResponse"
+
+  /admin/reviews/{reviewId}/approve:
+    post:
+      operationId: approveAdminReview
+      tags: [admin]
+      summary: Approve a review (admin or employer, no reason required)
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/reviews/{reviewId}/reject:
+    post:
+      operationId: rejectAdminReview
+      tags: [admin]
+      summary: Reject a review (admin or employer, reason optional)
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{userId}/ban:
+    post:
+      operationId: banUser
+      tags: [admin]
+      summary: Ban user (admin)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Banned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{userId}/unban:
+    post:
+      operationId: unbanUser
+      tags: [admin]
+      summary: Unban user (admin)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unbanned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -674,6 +950,95 @@ components:
           type: string
         avatarUrl:
           type: string
+        role:
+          type: string
+          enum: [user, creator, employer, admin]
+
+    UpdateMyProfileBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        bio:
+          type: string
+        avatarUrl:
+          type: string
+        phone:
+          type: string
+        country:
+          type: string
+
+    UpdateMyProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        user:
+          type: object
+        profile:
+          type: object
+      required: [success, user]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    LessonLikesResponse:
+      type: object
+      properties:
+        liked:
+          type: boolean
+        count:
+          type: integer
+        likesCount:
+          type: integer
+      required: [liked, count]
+
+    AdminLogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+
+    AdminEngagementsResponse:
+      type: object
+      properties:
+        engagements:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+
+    AdminCommentsResponse:
+      type: object
+      properties:
+        comments:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+
+    AdminReviewsResponse:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
 
     # ─── Course schemas ───────────────────────────────────────────────────────
     Course:

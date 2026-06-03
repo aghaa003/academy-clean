@@ -5,7 +5,9 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { GlobalSearchType } from './globalSearchType';
 
-export interface HealthStatus {
-  status: string;
-}
+export type GlobalSearchParams = {
+q: string;
+type?: GlobalSearchType;
+};

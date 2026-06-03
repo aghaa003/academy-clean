@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface PlatformStats {
+  totalUsers: number;
+  totalCourses: number;
+  totalRepositories: number;
+  totalChallenges: number;
+  totalChallengesSolved: number;
 }

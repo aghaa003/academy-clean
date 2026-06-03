@@ -5,7 +5,9 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { Course } from './course';
 
-export interface HealthStatus {
-  status: string;
+export interface CourseListResponse {
+  courses: Course[];
+  total: number;
 }

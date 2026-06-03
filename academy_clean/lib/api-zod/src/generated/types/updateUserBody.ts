@@ -5,7 +5,11 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateUserBodyRole } from './updateUserBodyRole';
 
-export interface HealthStatus {
-  status: string;
+export interface UpdateUserBody {
+  name?: string;
+  bio?: string;
+  avatarUrl?: string;
+  role?: UpdateUserBodyRole;
 }

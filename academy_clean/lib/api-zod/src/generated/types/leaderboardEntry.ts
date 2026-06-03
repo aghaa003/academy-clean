@@ -5,7 +5,11 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { User } from './user';
 
-export interface HealthStatus {
-  status: string;
+export interface LeaderboardEntry {
+  rank: number;
+  user: User;
+  points: number;
+  solvedChallenges: number;
 }

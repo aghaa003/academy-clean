@@ -19,7 +19,7 @@ export interface CurrentUser {
   linkedin_url: string | null;
   website_url: string | null;
   skills: string[] | null;
-  role: "user" | "creator" | "admin";
+  role: "user" | "creator" | "employer" | "admin";
   points: number;
   global_rank: number | null;
   profileVersion?: number;
@@ -61,7 +61,7 @@ const full  = raw.fullName  ?? raw.name ?? ([first, last].filter(Boolean).join("
     linkedin_url:   raw.linkedin_url ?? null,
     website_url:    raw.website_url ?? null,
     skills:         raw.skills ?? null,
-    role:           (raw.role as "user" | "creator" | "admin") ?? "user",
+    role:           (raw.role as CurrentUser["role"]) ?? "user",
     points:         raw.points ?? 0,
     global_rank:    raw.global_rank ?? null,
     profileVersion: raw.profileVersion ?? 0,

@@ -5,7 +5,9 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { Challenge } from './challenge';
 
-export interface HealthStatus {
-  status: string;
+export interface ChallengeListResponse {
+  challenges: Challenge[];
+  total: number;
 }

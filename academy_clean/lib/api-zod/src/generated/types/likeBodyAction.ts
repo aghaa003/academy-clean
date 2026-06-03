@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+export type LikeBodyAction = typeof LikeBodyAction[keyof typeof LikeBodyAction];
+
+
+export const LikeBodyAction = {
+  like: 'like',
+  unlike: 'unlike',
+} as const;

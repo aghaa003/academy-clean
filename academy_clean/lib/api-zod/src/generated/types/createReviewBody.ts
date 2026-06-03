@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface CreateReviewBody {
+  userId: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  comment?: string;
 }

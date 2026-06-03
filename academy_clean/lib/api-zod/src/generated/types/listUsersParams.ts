@@ -5,7 +5,10 @@
  * API specification for أكاديمية البرمجة المتكاملة
  * OpenAPI spec version: 0.1.0
  */
+import type { ListUsersRole } from './listUsersRole';
 
-export interface HealthStatus {
-  status: string;
-}
+export type ListUsersParams = {
+role?: ListUsersRole;
+limit?: number;
+offset?: number;
+};

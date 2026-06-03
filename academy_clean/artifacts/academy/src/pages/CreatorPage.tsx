@@ -147,8 +147,8 @@ export default function CreatorPage() {
   const createChallenge = useCreateChallenge();
   const allCourses = coursesData?.courses ?? [];
 
-  const isCreator = user?.role === "creator";
-  const isAdmin = user?.role === "admin" || user?.emailAddresses[0]?.emailAddress?.includes("admin");
+  const isCreator = user?.role === "creator" || user?.role === "employer";
+  const isAdmin = user?.role === "admin";
 
   if (!isLoaded) {
     return (

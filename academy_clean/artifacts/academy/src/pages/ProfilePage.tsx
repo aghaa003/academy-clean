@@ -92,8 +92,7 @@ export default function ProfilePage() {
     : "أكتوبر 2025";
 
   const userEmail = email;
-  const isAdmin =
-    userEmail.includes("admin") || user?.publicMetadata?.role === "admin";
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
     setAvatarUrl(user?.imageUrl ?? "");
