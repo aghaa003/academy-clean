@@ -258,6 +258,15 @@ async function parseSuccessBody(
 // ✅ Methods that need CSRF token (state-changing requests)
 const CSRF_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+async function ensureCsrfToken(): Promise<string> {
+  let token = getCsrfToken();
+  if (!token) {
+    await fetch("/sanctum/csrf-cookie", { credentials: "include" });
+    token = getCsrfToken();
+  }
+  return token;
+}
+
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
@@ -280,18 +289,13 @@ export async function customFetch<T = unknown>(
     headers.set("content-type", "application/json");
   }
 
-  if (responseType === "json" && !headers.has("accept")) {
-    headers.set("accept", DEFAULT_JSON_ACCEPT);
-  }
-
-  // ✅ Always send Accept: application/json so Laravel returns JSON not redirects
   if (!headers.has("accept")) {
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // ✅ Attach CSRF token for state-changing requests
+  // ✅ Auto-fetch CSRF cookie if missing, then attach token
   if (CSRF_METHODS.has(method)) {
-    const csrfToken = getCsrfToken();
+    const csrfToken = await ensureCsrfToken();
     if (csrfToken) {
       headers.set("X-XSRF-TOKEN", csrfToken);
     }
@@ -306,12 +310,11 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  // ✅ Always include credentials so session cookie is sent
   const response = await fetch(input, {
     ...init,
     method,
     headers,
-    credentials: "include",  // ← THE KEY FIX
+    credentials: "include",
   });
 
   if (!response.ok) {

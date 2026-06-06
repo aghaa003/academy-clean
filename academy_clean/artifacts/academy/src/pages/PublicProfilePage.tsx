@@ -83,7 +83,7 @@ export default function PublicProfilePage() {
     if (!userId) return;
     setLoading(true);
     setError(null);
-    fetch(`${API}/api/users/${encodeURIComponent(userId)}`, { credentials: "include" })
+    fetch(`/api/users/${encodeURIComponent(userId)}`, { credentials: "include" })
       .then(async (res) => {
         if (res.status === 403) { setError("هذا الحساب غير متاح للعرض العام"); return; }
         if (!res.ok) { setError("المستخدم غير موجود"); return; }
@@ -97,7 +97,7 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!userId) return;
     setReposLoading(true);
-    fetch(`${API}/api/repositories?userId=${encodeURIComponent(userId)}&limit=50`, { credentials: "include" })
+    fetch(`/api/repositories?userId=${encodeURIComponent(userId)}&limit=50`, { credentials: "include" })
       .then(async (res) => {
         if (!res.ok) return;
         const data = await res.json();

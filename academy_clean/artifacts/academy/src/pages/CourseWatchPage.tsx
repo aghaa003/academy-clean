@@ -101,7 +101,7 @@ export default function CourseWatchPage() {
   const fetchCourseProgress = useCallback(async () => {
     if (!user || !courseId) return;
     try {
-      const res = await fetch(`${API}/api/courses/${courseId}/progress`, { credentials: "include" });
+      const res = await fetch(`/api/courses/${courseId}/progress`, { credentials: "include" });
       if (res.ok) {
         const rows: any[] = await res.json();
         const map: Record<number, LessonProgressData> = {};
@@ -115,14 +115,14 @@ export default function CourseWatchPage() {
 
   const fetchComments = useCallback(async (lessonId: number) => {
     try {
-      const res = await fetch(`${API}/api/lessons/${lessonId}/comments`);
+      const res = await fetch(`/api/lessons/${lessonId}/comments`);
       if (res.ok) setComments(await res.json());
     } catch {}
   }, []);
 
   const fetchLikes = useCallback(async (lessonId: number) => {
     try {
-      const res = await fetch(`${API}/api/lessons/${lessonId}/likes`, { credentials: "include" });
+      const res = await fetch(`/api/lessons/${lessonId}/likes`, { credentials: "include" });
       if (res.ok) setLikesData(await res.json());
     } catch {}
   }, []);
@@ -141,7 +141,7 @@ export default function CourseWatchPage() {
   const saveProgress = useCallback(async (lessonId: number, watchedSeconds: number, completed: boolean) => {
     if (!user) return;
     try {
-      await fetch(`${API}/api/lessons/${lessonId}/progress`, {
+      await fetch(`/api/lessons/${lessonId}/progress`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -209,7 +209,7 @@ export default function CourseWatchPage() {
     if (!user || likeLoading || !activeLesson) return;
     setLikeLoading(true);
     try {
-      const res = await fetch(`${API}/api/lessons/${activeLesson.id}/like`, {
+      const res = await fetch(`/api/lessons/${activeLesson.id}/like`, {
         method: "POST", credentials: "include",
       });
       if (res.ok) setLikesData(await res.json());
@@ -220,7 +220,7 @@ export default function CourseWatchPage() {
     if (!user || !newComment.trim() || commentLoading || !activeLesson) return;
     setCommentLoading(true);
     try {
-      const res = await fetch(`${API}/api/lessons/${activeLesson.id}/comments`, {
+      const res = await fetch(`/api/lessons/${activeLesson.id}/comments`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newComment.trim() }),
@@ -237,7 +237,7 @@ export default function CourseWatchPage() {
     if (!user || !replyContent.trim() || replyLoading || !activeLesson) return;
     setReplyLoading(true);
     try {
-      const res = await fetch(`${API}/api/lessons/${activeLesson.id}/comments`, {
+      const res = await fetch(`/api/lessons/${activeLesson.id}/comments`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: replyContent.trim(), parentId }),

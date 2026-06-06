@@ -73,7 +73,7 @@ export default function CommunityPage() {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/api/community/posts`, { credentials: "include" });
+      const res = await fetch(`/api/community/posts`, { credentials: "include" });
       if (res.ok) setPosts(await res.json());
     } catch {} finally { setLoading(false); }
   }, []);
@@ -85,7 +85,7 @@ export default function CommunityPage() {
     setPublishing(true);
     try {
       const tags = newTags.split(",").map((t) => t.trim()).filter(Boolean);
-      const res = await fetch(`${API}/api/community/posts`, {
+      const res = await fetch(`/api/community/posts`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newTitle.trim(), body: newBody.trim(), tags }),
@@ -103,7 +103,7 @@ export default function CommunityPage() {
     if (!user || likeLoading[postId]) return;
     setLikeLoading((prev) => ({ ...prev, [postId]: true }));
     try {
-      const res = await fetch(`${API}/api/community/posts/${postId}/like`, {
+      const res = await fetch(`/api/community/posts/${postId}/like`, {
         method: "POST", credentials: "include",
       });
       if (res.ok) {
@@ -124,7 +124,7 @@ export default function CommunityPage() {
       if (!commentsByPost[postId]) {
         setLoadingComments((prev) => ({ ...prev, [postId]: true }));
         try {
-          const res = await fetch(`${API}/api/community/posts/${postId}/comments`);
+          const res = await fetch(`/api/community/posts/${postId}/comments`);
           if (res.ok) {
             const data = await res.json();
             setCommentsByPost((prev) => ({ ...prev, [postId]: data }));
@@ -139,7 +139,7 @@ export default function CommunityPage() {
     if (!text || !user || commentLoading[postId]) return;
     setCommentLoading((prev) => ({ ...prev, [postId]: true }));
     try {
-      const res = await fetch(`${API}/api/community/posts/${postId}/comments`, {
+      const res = await fetch(`/api/community/posts/${postId}/comments`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: text }),

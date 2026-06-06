@@ -2,7 +2,7 @@ import { useEffect, useCallback, useMemo, useRef, useState, type ChangeEvent } f
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
 import Footer from "@/components/layout/Footer";
-import { useGetUserStats, useGetLeaderboard, useListCourses } from "@workspace/api-client-react";
+import { useGetUserStats, useGetLeaderboard, useListCourses, useListRepositories } from "@workspace/api-client-react";
 import {
   Camera, ChevronDown, Trophy, BookOpen, Code2,
   Star, BarChart2, Shield, User, FolderGit2, Plus, ExternalLink, Loader2, Globe, Trash2,
@@ -62,7 +62,62 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const displayName = `${firstName} ${lastName}`.trim() || user?.fullName || "المستخدم";
   const avatarSource = avatarUrl || user?.imageUrl || "";
+const [activities, setActivities] = useState<any[]>([]);
+// Define what the data should look like
+interface ProfileData {
+  repositories: {
+    id: number;
+    title: string;
+      description: string;
+      technologies: string[];
+      repoUrl: string;
+      liveDemoUrl: string;
+      codeFilesUrls: string[];
+      pdfFilesUrls: string[];
+      coverImageUrl: string;
+      sourceProject: string;
+      likes: number;
 
+  }[];
+}
+// Add in useEffect
+useEffect(() => {
+  Promise.all([
+    fetch("/api/challenges/my-submissions", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+    fetch(`/api/repositories?userId=${user?.id}&limit=3`, { credentials: "include" }).then(r => r.ok ? r.json() : {}),
+  ]).then(([submissions, reposData]) => {
+    const acts: any[] = [];
+
+    // Add challenge submissions as activities
+    (Array.isArray(submissions) ? submissions : []).slice(0, 3).forEach((s: any) => {
+      acts.push({
+        type: "challenge",
+        icon: "🏆",
+        title: s.success ? `أكملت تحدي: ${s.challenge?.title ?? "تحدي"}` : `حاولت تحدي: ${s.challenge?.title ?? "تحدي"}`,
+        subtitle: s.success ? `+${s.points_earned} نقطة` : "لم تنجح — حاول مجدداً",
+        color: s.success ? "#059669" : "#dc2626",
+        date: s.created_at,
+      });
+    });
+const { data } = useListRepositories<ProfileData>();
+    // Add repos as activities
+    const repos = data?.repositories ?? [];
+    repos.slice(0, 2).forEach((r: any) => {
+      acts.push({
+        type: "repo",
+        icon: "📁",
+        title: `نشرت مشروع: ${r.title}`,
+        subtitle: (r.technologies ?? []).slice(0, 2).join(", "),
+        color: "#4f46e5",
+        date: r.created_at,
+      });
+    });
+
+    // Sort by date descending
+    acts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setActivities(acts.slice(0, 5));
+  }).catch(() => {});
+}, [user?.id]);
   const userId = user?.id ?? "";
 
   const { data: statsData } = useGetUserStats(userId, {
@@ -550,16 +605,28 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                <div>
-                  <h3 className="font-bold text-gray-900 text-right mb-4">آخر النشاطات</h3>
-                  <div className="space-y-2">
-                    {activityLogs.map((log, i) => (
-                      <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-right text-sm text-gray-700">
-                        {log}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            {/* آخر النشاطات */}
+<div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+  <h3 className="font-bold text-gray-900 mb-4 text-right">آخر النشاطات</h3>
+  {activities.length === 0 ? (
+    <p className="text-center text-gray-400 text-sm py-4">لا توجد نشاطات بعد</p>
+  ) : (
+    <div className="space-y-3">
+      {activities.map((act, i) => (
+        <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+          <div className="text-2xl">{act.icon}</div>
+          <div className="flex-1 text-right">
+            <div className="text-sm font-medium text-gray-800">{act.title}</div>
+            <div className="text-xs mt-0.5" style={{ color: act.color }}>{act.subtitle}</div>
+          </div>
+          <div className="text-xs text-gray-400 whitespace-nowrap">
+            {new Date(act.date).toLocaleDateString('ar-EG')}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
                 <div>
                   <h3 className="font-bold text-gray-900 text-right mb-4 flex items-center gap-2 justify-end">

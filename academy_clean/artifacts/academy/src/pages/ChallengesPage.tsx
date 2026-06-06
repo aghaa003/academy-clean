@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef,useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
@@ -145,7 +145,10 @@ const [hintText, setHintText]       = useState<string | null>(null);
   const [myChallenges, setMyChallenges] = useState<MyChallenge[]>(loadMyChallenges);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
+const [mySubmissions, setMySubmissions] = useState<any[]>([]);
+const [challengeStats, setChallengeStats] = useState({
+  solved: 0, total: 0, points: 0, successRate: 0
+});
 const { data, isLoading } = useListChallenges();
 const { data: leaderboard } = useGetLeaderboard();
   const challenges = data?.challenges ?? [];
@@ -154,7 +157,23 @@ const { data: leaderboard } = useGetLeaderboard();
     const matchFilter = activeFilter === "الكل" || c.category === activeFilter;
     return matchSearch && matchFilter;
   });
-
+useEffect(() => {
+  fetch("/api/challenges/my-submissions", { credentials: "include" })
+    .then(res => res.ok ? res.json() : [])
+    .then(data => setMySubmissions(Array.isArray(data) ? data : []))
+    .catch(() => {});
+}, []);
+useEffect(() => {
+  if (mySubmissions.length === 0) return;
+  const solved = mySubmissions.filter(s => s.success).length;
+  const points = mySubmissions.filter(s => s.success).reduce((acc, s) => acc + (s.points_earned ?? 0), 0);
+  setChallengeStats({
+    solved,
+    total: (challenges).length,
+    points,
+    successRate: mySubmissions.length > 0 ? Math.round((solved / mySubmissions.length) * 100) : 0,
+  });
+}, [mySubmissions, challenges]);
   const openChallenge = (challenge: any) => {
     setActiveChallenge(challenge);
     setSolution("");
@@ -333,30 +352,27 @@ const getHint = async () => {
         </div>
       </section>
 
-      {/* My solved challenges bar */}
-      {myChallenges.length > 0 && (
-        <section className="max-w-7xl mx-auto w-full px-4 pt-6">
-          <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Trophy size={16} className="text-indigo-600" />
-              <h3 className="font-bold text-indigo-800 text-sm">تحدياتي المحلولة ({myChallenges.length})</h3>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {myChallenges.map((mc) => (
-                <div
-                  key={String(mc.challengeId)}
-                  className="flex items-center gap-1.5 bg-white border border-indigo-100 rounded-full px-3 py-1.5 text-xs"
-                >
-                  {mc.isPublic ? <Eye size={11} className="text-indigo-400" /> : <Lock size={11} className="text-gray-400" />}
-                  <span className="font-semibold text-gray-800">{mc.title}</span>
-                  <span className="text-indigo-600 font-bold">{mc.score}/100</span>
-                  <span className="text-amber-600 font-bold">+{mc.points}نقطة</span>
-                </div>
-              ))}
-            </div>
+     {/* تحدياتي المنجزة */}
+<div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+  <h3 className="font-bold text-gray-900 mb-4 text-right">تحدياتي المنجزة</h3>
+  {mySubmissions.filter(s => s.success).length === 0 ? (
+    <p className="text-center text-gray-400 py-6 text-sm">لم تنجح في أي تحدٍ بعد — ابدأ الآن!</p>
+  ) : (
+    <div className="space-y-3">
+      {mySubmissions.filter(s => s.success).slice(0, 5).map((sub) => (
+        <div key={sub.id} className="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-100">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 font-bold text-sm">{sub.points_earned ?? 0} نقطة</span>
+            <span className="text-xs text-gray-400">{new Date(sub.created_at).toLocaleDateString('ar-EG')}</span>
           </div>
-        </section>
-      )}
+          <span className="text-sm font-medium text-gray-800 text-right">
+            {sub.challenge?.title ?? `تحدي #${sub.challenge_id}`}
+          </span>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
       {/* Challenges explorer */}
       <section className="max-w-7xl mx-auto w-full px-4 py-10">
@@ -483,13 +499,14 @@ const getHint = async () => {
 
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
-              { label: "التحديات المكملة", value: myChallenges.filter((c) => c.score >= 60).length },
-              { label: "إجمالي النقاط", value: myChallenges.reduce((s, c) => s + (c.score >= 60 ? c.points : 0), 0) },
-              { label: "معدل النجاح", value: myChallenges.length > 0 ? `${Math.round((myChallenges.filter((c) => c.score >= 60).length / myChallenges.length) * 100)}%` : "0%" },
-            ].map((m) => (
-              <div key={m.label} className="bg-gray-50 rounded-xl p-3 text-center">
-                <div className="text-xl font-extrabold text-indigo-600">{m.value}</div>
-                <div className="text-xs text-gray-500 mt-0.5 leading-tight">{m.label}</div>
+    { label: "تحديات محلولة", value: challengeStats.solved, color: "#4f46e5" },
+    { label: "نقاط مكتسبة", value: challengeStats.points, color: "#059669" },
+    { label: "إجمالي التحديات", value: challengeStats.total, color: "#d97706" },
+    { label: "معدل النجاح", value: `${challengeStats.successRate}%`, color: "#dc2626" },
+            ].map((state) => (
+              <div key={state.label} className="bg-gray-50 rounded-xl p-3 text-center">
+                <div className="text-xl font-extrabold text-indigo-600">{state.value}</div>
+                <div className="text-xs text-gray-500 mt-0.5 leading-tight">{state.label}</div>
               </div>
             ))}
           </div>
