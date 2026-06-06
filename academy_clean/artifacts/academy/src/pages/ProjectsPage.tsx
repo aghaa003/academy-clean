@@ -288,6 +288,10 @@ export default function ProjectsPage() {
   const [justStarted, setJustStarted] = useState<number | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null);
+  const [hintLoading,   setHintLoading]   = useState(false);
+const [hintText,      setHintText]       = useState<string | null>(null);
+const [fixLoading,    setFixLoading]     = useState(false);
+const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Upload solution modal state
@@ -320,7 +324,41 @@ export default function ProjectsPage() {
     setReviewResult(null);
     setReviewError(null);
   };
+const getProjectHint = async (problem: string) => {
+  if (hintLoading) return;
+  setHintLoading(true);
+  setHintText(null);
+  try {
+    const res = await fetch("/api/ai/helper-projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "hint", question: problem }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { ai_response?: string };
+      setHintText(data.ai_response ?? null);
+    }
+  } catch { /* silent */ }
+  finally { setHintLoading(false); }
+};
 
+const getProjectFix = async (code: string, language: string, problem: string) => {
+  if (fixLoading) return;
+  setFixLoading(true);
+  setFixedCode(null);
+  try {
+    const res = await fetch("/api/ai/helper-projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "fix", code, language, question: problem }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { fixed_code?: string };
+      setFixedCode(data.fixed_code ?? null);
+    }
+  } catch { /* silent */ }
+  finally { setFixLoading(false); }
+};
   const handleLangChange = (lang: AssignmentLang) => {
     setCurrentAssignmentIdx(0);
     setSolution("");
@@ -658,6 +696,42 @@ export default function ProjectsPage() {
                 >
                   طلب مساعدة
                 </button>
+                <button
+  onClick={() => getProjectHint(currentAssignment?.problem ?? "")}
+  disabled={hintLoading}
+  className="rounded-full px-4 py-2 text-sm text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50"
+>
+  {hintLoading ? <Loader2 size={13} className="animate-spin inline" /> : "💡 تلميح"}
+</button>
+
+<button
+  onClick={() => getProjectFix(solution, String(activeLang), currentAssignment?.problem ?? "")}
+  disabled={fixLoading || !solution.trim()}
+  className="rounded-full px-4 py-2 text-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
+>
+  {fixLoading ? <Loader2 size={13} className="animate-spin inline" /> : "🔧 إصلاح الكود"}
+</button>
+
+{hintText && (
+  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right">
+    🔍 {hintText}
+  </div>
+)}
+
+{fixedCode && (
+  <div className="bg-gray-900 rounded-xl p-4 text-xs font-mono text-green-400 overflow-x-auto">
+    <div className="flex justify-between items-center mb-2">
+      <button
+        onClick={() => setSolution(fixedCode)}
+        className="text-xs text-green-300 border border-green-700 rounded px-2 py-1"
+      >
+        استخدم هذا الكود
+      </button>
+      <span className="text-gray-500">الكود المصحح</span>
+    </div>
+    <pre>{fixedCode}</pre>
+  </div>
+)}
                 <button
                   onClick={handleSubmitSolution}
                   disabled={reviewing}

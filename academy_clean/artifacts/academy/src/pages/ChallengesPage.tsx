@@ -132,7 +132,8 @@ export default function ChallengesPage() {
   const { user } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("الكل");
-
+const [hintLoading, setHintLoading] = useState(false);
+const [hintText, setHintText]       = useState<string | null>(null);
   const [activeChallenge, setActiveChallenge] = useState<any | null>(null);
   const [detailChallenge, setDetailChallenge] = useState<any | null>(null);
   const [solution, setSolution] = useState("");
@@ -145,9 +146,8 @@ export default function ChallengesPage() {
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { data, isLoading } = useListChallenges({ query: { queryKey: ["challenges"] } });
-  const { data: leaderboard } = useGetLeaderboard({ query: { queryKey: ["leaderboard", "challenges"] } });
-
+const { data, isLoading } = useListChallenges();
+const { data: leaderboard } = useGetLeaderboard();
   const challenges = data?.challenges ?? [];
   const filtered = challenges.filter((c) => {
     const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase());
@@ -162,6 +162,7 @@ export default function ChallengesPage() {
     setIsPublic(true);
     setReviewResult(null);
     setReviewError(null);
+    setHintText(null);
   };
 
   const closeChallenge = () => {
@@ -278,7 +279,28 @@ export default function ChallengesPage() {
       setReviewing(false);
     }
   };
-
+const getHint = async () => {
+  if (!activeChallenge || hintLoading) return;
+  setHintLoading(true);
+  setHintText(null);
+  try {
+    const res = await fetch("/api/ai/helper-challenges", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "hint",
+        challenge_id: activeChallenge.id,
+        question: activeChallenge.description,
+        language: activeChallenge.category,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { ai_response?: string };
+      setHintText(data.ai_response ?? null);
+    }
+  } catch { /* silent */ }
+  finally { setHintLoading(false); }
+};
   const isSolved = (id: string | number) => myChallenges.some((c) => c.challengeId === id && c.score >= 60);
 
   return (
@@ -678,7 +700,25 @@ export default function ChallengesPage() {
                   ⚠️ {reviewError}
                 </div>
               )}
+{/* Hint button */}
+<div className="flex justify-end">
+  <button
+    onClick={getHint}
+    disabled={hintLoading}
+    className="flex items-center gap-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-full px-4 py-2 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+  >
+    {hintLoading
+      ? <><Loader2 size={13} className="animate-spin" /> جاري التلميح...</>
+      : "💡 أحتاج تلميح"}
+  </button>
+</div>
 
+{/* Hint display */}
+{hintText && (
+  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right leading-relaxed">
+    🔍 {hintText}
+  </div>
+)}
               {/* Action buttons */}
               <div className="flex gap-3 justify-end pt-1">
                 <button
