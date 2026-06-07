@@ -5,6 +5,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
 import { Heart, MessageCircle, Plus, X, Send, Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 const API = BASE;
@@ -73,7 +74,7 @@ export default function CommunityPage() {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/community/posts`, { credentials: "include" });
+const res = await apiFetch(`/api/community/posts`);
       if (res.ok) setPosts(await res.json());
     } catch {} finally { setLoading(false); }
   }, []);
@@ -85,11 +86,11 @@ export default function CommunityPage() {
     setPublishing(true);
     try {
       const tags = newTags.split(",").map((t) => t.trim()).filter(Boolean);
-      const res = await fetch(`/api/community/posts`, {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle.trim(), body: newBody.trim(), tags }),
-      });
+      const res = await apiFetch(`/api/community/posts`, {
+  method: "POST",
+  body: JSON.stringify({ title: newTitle.trim(), body: newBody.trim(), tags }),
+});
+   
       if (res.ok) {
         const post = await res.json();
         setPosts((prev) => [post, ...prev]);
@@ -103,9 +104,9 @@ export default function CommunityPage() {
     if (!user || likeLoading[postId]) return;
     setLikeLoading((prev) => ({ ...prev, [postId]: true }));
     try {
-      const res = await fetch(`/api/community/posts/${postId}/like`, {
-        method: "POST", credentials: "include",
-      });
+     const res = await apiFetch(`/api/community/posts/${postId}/like`, {
+  method: "POST",
+});
       if (res.ok) {
         const data = await res.json();
         setPosts((prev) => prev.map((p) =>
@@ -124,7 +125,7 @@ export default function CommunityPage() {
       if (!commentsByPost[postId]) {
         setLoadingComments((prev) => ({ ...prev, [postId]: true }));
         try {
-          const res = await fetch(`/api/community/posts/${postId}/comments`);
+const res = await apiFetch(`/api/community/posts/${postId}/comments`);
           if (res.ok) {
             const data = await res.json();
             setCommentsByPost((prev) => ({ ...prev, [postId]: data }));
@@ -139,11 +140,11 @@ export default function CommunityPage() {
     if (!text || !user || commentLoading[postId]) return;
     setCommentLoading((prev) => ({ ...prev, [postId]: true }));
     try {
-      const res = await fetch(`/api/community/posts/${postId}/comments`, {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text }),
-      });
+      const res = await apiFetch(`/api/community/posts/${postId}/comments`, {
+  method: "POST",
+  body: JSON.stringify({ content:text }),
+});
+   
       if (res.ok) {
         const comment = await res.json();
         setCommentsByPost((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), comment] }));

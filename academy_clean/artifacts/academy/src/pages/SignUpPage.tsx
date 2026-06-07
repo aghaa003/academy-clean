@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useCurrentUser } from "@/lib/auth-context";
 import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
-
 const basePath = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+import { apiFetch } from "@/lib/api-fetch";
 
 const INPUT: React.CSSProperties = {
   width: "100%",
@@ -31,6 +31,8 @@ export default function SignUpPage() {
   const [firstName,  setFirstName]  = useState("");
   const [lastName,   setLastName]   = useState("");
   const [username,   setUsername]   = useState("");
+  const [emailStatus,    setEmailStatus]    = useState<"idle"|"checking"|"taken"|"available">("idle");
+const [usernameStatus, setUsernameStatus] = useState<"idle"|"checking"|"taken"|"available">("idle");
   const [email,      setEmail]      = useState("");
   const [password,   setPassword]   = useState("");
   const [confirmPw,  setConfirmPw]  = useState("");
@@ -50,13 +52,37 @@ export default function SignUpPage() {
     e.target.style.borderColor = "#e2e8f0";
     e.target.style.boxShadow   = "none";
   };
+const checkField = async (field: "email" | "username", value: string) => {
+  if (!value.trim()) return;
+  if (field === "email" && !value.includes("@")) return;
+  if (field === "username" && value.length < 3) return;
 
+  if (field === "email") setEmailStatus("checking");
+  else setUsernameStatus("checking");
+
+  try {
+    const res = await apiFetch(
+      `/api/check-availability?${field}=${encodeURIComponent(value)}`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (field === "email") setEmailStatus(data.email === "taken" ? "taken" : "available");
+      else setUsernameStatus(data.username === "taken" ? "taken" : "available");
+    }
+  } catch {
+    if (field === "email") setEmailStatus("idle");
+    else setUsernameStatus("idle");
+  }
+};
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     if (!firstName.trim())                     { setError("يرجى إدخال الاسم الأول."); return; }
     if (!username.trim() || username.length < 3) { setError("يرجى إدخال اسم مستخدم (3 أحرف على الأقل)."); return; }
+    // In handleSubmit, add after the username validation:
+if (emailStatus === "taken") { setError("هذا البريد الإلكتروني مسجل بالفعل."); return; }
+if (usernameStatus === "taken") { setError("اسم المستخدم محجوز، يرجى اختيار اسم آخر."); return; }
     if (!email.trim() || !email.includes("@")) { setError("يرجى إدخال بريد إلكتروني صحيح."); return; }
     if (!password)                             { setError("يرجى إدخال كلمة المرور."); return; }
     if (password.length < 8)                   { setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل."); return; }
@@ -153,20 +179,49 @@ export default function SignUpPage() {
               <input
                 type="text" placeholder="اسم المستخدم *" value={username} autoComplete="username"
                 onChange={e => setUsername(e.target.value)}
-                style={INPUT} onFocus={focus} onBlur={blur}
+                style={INPUT} onFocus={focus} onBlur={(e) => {
+  blur(e);
+  checkField("username", username);
+}}
               />
             </div>
-
+{usernameStatus === "taken" && (
+  <p style={{ color: "#dc2626", fontSize: "0.75rem", marginTop: "4px", textAlign: "right" }}>
+    ⚠️ اسم المستخدم محجوز، جرب اسماً آخر
+  </p>
+)}
+{usernameStatus === "available" && (
+  <p style={{ color: "#16a34a", fontSize: "0.75rem", marginTop: "4px", textAlign: "right" }}>
+    ✓ اسم المستخدم متاح
+  </p>
+)}
             {/* Email */}
             <div style={{ position:"relative" }}>
               <span style={{ position:"absolute", right:"12px", top:"50%", transform:"translateY(-50%)", color:"#94a3b8", pointerEvents:"none" }}><Mail size={15}/></span>
               <input
                 type="email" placeholder="البريد الإلكتروني *" value={email} autoComplete="email"
                 onChange={e => setEmail(e.target.value)}
-                style={INPUT} onFocus={focus} onBlur={blur}
+                style={INPUT} onFocus={focus} onBlur={(e) => {
+  blur(e);
+  checkField("email", email);
+}}
               />
             </div>
-
+{emailStatus === "taken" && (
+  <p style={{ color: "#dc2626", fontSize: "0.75rem", marginTop: "4px", textAlign: "right" }}>
+    ⚠️ هذا البريد الإلكتروني مسجل بالفعل
+  </p>
+)}
+{emailStatus === "available" && (
+  <p style={{ color: "#16a34a", fontSize: "0.75rem", marginTop: "4px", textAlign: "right" }}>
+    ✓ البريد الإلكتروني متاح
+  </p>
+)}
+{emailStatus === "checking" && (
+  <p style={{ color: "#94a3b8", fontSize: "0.75rem", marginTop: "4px", textAlign: "right" }}>
+    جاري التحقق...
+  </p>
+)}
             {/* Password */}
             <div style={{ position:"relative" }}>
               <span style={{ position:"absolute", right:"12px", top:"50%", transform:"translateY(-50%)", color:"#94a3b8", pointerEvents:"none" }}><Lock size={15}/></span>

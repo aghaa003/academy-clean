@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
-
+import { apiFetch } from "@/lib/api-fetch";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 export interface CurrentUser {
@@ -74,8 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await fetch(`/api/auth/me`, { credentials: "include" });
-      if (res.ok) {
+const res = await apiFetch(`/api/auth/me`);      if (res.ok) {
         const data = await res.json();
         // ✅ Fix 1: handle both { user: {...} } and flat {...} shapes
         const raw      = data.user ?? data;
@@ -98,8 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // ✅ Fix 2: correct logout URL
-    await fetch(`/api/logout`, { method: "POST", credentials: "include" });
-    setUser(null);
+await apiFetch(`/api/logout`, { method: "POST" });    setUser(null);
     window.location.href = BASE + "/sign-in";
   }, []);
 

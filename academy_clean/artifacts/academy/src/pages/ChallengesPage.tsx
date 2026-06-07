@@ -8,6 +8,7 @@ import {
   Search, Star, Trophy, Users, Code2, CheckCircle, Database, Globe, Cpu,
   X, Loader2, XCircle, Upload, Lock, Eye, Info,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const LANG_KEYWORDS_CLIENT: Record<string, string[]> = {
   "C": ["int", "printf", "scanf", "return", "main", "for", "while", "if", "include"],
@@ -214,16 +215,14 @@ useEffect(() => {
       let data: ReviewResult;
 
       try {
-        const res = await fetch("/api/assignments/review", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: codeToReview,
+        const res = await apiFetch("/api/assignments/review", {
+  method: "POST",
+  body: JSON.stringify({    code: codeToReview,
             language: lang,
             problem,
-            problemTitle: activeChallenge.title,
-          }),
-        });
+            problemTitle: activeChallenge.title, }),
+});
+       
         if (res.ok) {
           const json = await res.json() as ReviewResult;
           data = (json && typeof json.score === "number") ? json : clientFallbackEvaluate(codeToReview, lang, problem);
@@ -261,17 +260,14 @@ useEffect(() => {
 
       // Submit to backend — handles points, deduplication, and leaderboard update
       if (user?.id) {
-        fetch(`/api/challenges/${activeChallenge.id}/submit`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            solution: codeToReview,
+        apiFetch(`/api/challenges/${activeChallenge.id}/submit`, {
+  method: "POST",
+  body: JSON.stringify({    solution: codeToReview,
             language: lang,
             score: data.score,
-            isCorrect: data.isCorrect,
-          }),
-        })
+            isCorrect: data.isCorrect, }),
+})
+        
           .then((r) => r.json())
           .then((result) => {
             if (result.pointsEarned > 0) {
@@ -303,16 +299,14 @@ const getHint = async () => {
   setHintLoading(true);
   setHintText(null);
   try {
-    const res = await fetch("/api/ai/helper-challenges", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "hint",
+    const res = await apiFetch("/api/ai/helper-challenges", {
+  method: "POST",
+  body: JSON.stringify({      mode: "hint",
         challenge_id: activeChallenge.id,
         question: activeChallenge.description,
-        language: activeChallenge.category,
-      }),
-    });
+        language: activeChallenge.category, }),
+});
+   
     if (res.ok) {
       const data = await res.json() as { ai_response?: string };
       setHintText(data.ai_response ?? null);

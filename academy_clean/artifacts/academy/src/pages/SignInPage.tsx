@@ -149,9 +149,11 @@ const handleSubmit = async (e: React.FormEvent) => {
 
             {/* Remember + Forgot */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ color:"#94a3b8", fontSize:"0.8rem", fontWeight:600, cursor:"default" }}>
-                نسيت كلمة المرور؟ تواصل مع الإدارة
-              </span>
+          href={basePath + "/forgot-password"}
+  style={{ color: "#4f46e5", fontSize: "0.8rem", fontWeight: 600, textDecoration: "none" }}
+>
+  نسيت كلمة المرور؟
+</a>
               <label style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"0.8rem", color:"#64748b", cursor:"pointer" }}>
                 <input type="checkbox" style={{ accentColor:"#4f46e5", width:"14px", height:"14px" }} />
                 تذكرني

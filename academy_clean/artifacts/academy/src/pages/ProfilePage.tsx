@@ -7,6 +7,7 @@ import {
   Camera, ChevronDown, Trophy, BookOpen, Code2,
   Star, BarChart2, Shield, User, FolderGit2, Plus, ExternalLink, Loader2, Globe, Trash2,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Tab = "personal" | "courses" | "dashboard" | "settings" | "projects";
 
@@ -174,7 +175,8 @@ const { data } = useListRepositories<ProfileData>();
 
   const handleSave = async () => {
     try {
-      const res = await fetch("/api/users/profile", {
+     const res = await apiFetch("/api/users/profile"
+, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -211,7 +213,7 @@ const { data } = useListRepositories<ProfileData>();
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", credentials: "include", body: form });
+const res = await apiFetch("/api/upload", { method: "POST", body: form });
       if (!res.ok) throw new Error("upload failed");
       const data = await res.json() as { file?: { url: string }; url?: string };
       // API returns { file: { url } }; fall back to top-level url for safety
@@ -221,12 +223,11 @@ const { data } = useListRepositories<ProfileData>();
       const stamp = Date.now();
       setAvatarStamp(stamp);
       // Immediately persist the new avatar URL to the database
-      await fetch("/api/users/profile", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ avatarUrl: uploadedUrl }),
-      });
+      await apiFetch("/api/users/profile", {
+  method: "POST",
+  body: JSON.stringify({ avatarUrl: uploadedUrl }),
+}); 
+  
       window.dispatchEvent(new CustomEvent("academy:user-updated", {
         detail: { imageUrl: uploadedUrl, stamp },
       }));
@@ -260,10 +261,8 @@ const { data } = useListRepositories<ProfileData>();
     if (!window.confirm("هل أنت متأكد من حذف هذا المشروع؟ لا يمكن التراجع عن هذا الإجراء.")) return;
     setDeletingRepoId(repoId);
     try {
-      const res = await fetch(`/api/repositories/${repoId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+    const res = await apiFetch(`/api/repositories/${repoId}`, { method: "DELETE" });
+
       if (res.ok) {
         setRepos((prev) => prev.filter((r) => r.id !== repoId));
         setActivityLogs((prev) => ["تم حذف مشروع", ...prev].slice(0, 5));
@@ -298,11 +297,9 @@ const { data } = useListRepositories<ProfileData>();
       if (codeFiles.length > 0) {
         const formData = new FormData();
         codeFiles.forEach(f => formData.append("files", f));
-        const uploadRes = await fetch("/api/upload/multiple", {
-          method: "POST",
-          credentials: "include",
-          body: formData,
-        });
+        const uploadRes = await apiFetch("/api/upload/multiple", { method: "POST", body: formData });
+
+      
         if (!uploadRes.ok) {
           const errorText = await uploadRes.text();
           throw new Error(`فشل رفع ملفات الأكواد (${uploadRes.status}): ${errorText.slice(0, 100)}`);
@@ -316,11 +313,9 @@ const { data } = useListRepositories<ProfileData>();
       if (pdfFiles.length > 0) {
         const formData = new FormData();
         pdfFiles.forEach(f => formData.append("files", f));
-        const uploadRes = await fetch("/api/upload/multiple", {
-          method: "POST",
-          credentials: "include",
-          body: formData,
-        });
+        const uploadRes = await apiFetch("/api/upload/multiple", { method: "POST", body: formData });
+
+     
         if (!uploadRes.ok) {
           const errorText = await uploadRes.text();
           throw new Error(`فشل رفع ملفات PDF (${uploadRes.status}): ${errorText.slice(0, 100)}`);
@@ -334,22 +329,17 @@ const { data } = useListRepositories<ProfileData>();
       if (newRepoCoverImage) {
         const logoFormData = new FormData();
         logoFormData.append("file", newRepoCoverImage);
-        const logoRes = await fetch("/api/upload", {
-          method: "POST",
-          credentials: "include",
-          body: logoFormData,
-        });
+        const logoRes = await apiFetch("/api/upload", { method: "POST", body: logoFormData });
+
+    
         if (logoRes.ok) {
           const logoData = await logoRes.json() as { file?: { url?: string }; url?: string };
           coverImageUrl = logoData.file?.url ?? logoData.url ?? null;
         }
       }
-
-      const repoRes = await fetch("/api/repositories", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+const repoRes = await apiFetch("/api/repositories", {
+  method: "POST",
+  body: JSON.stringify({
           title: newRepoTitle.trim(),
           description: newRepoDesc.trim(),
           technologies: newRepoTechs.split(",").map(t => t.trim()).filter(Boolean),
@@ -361,7 +351,8 @@ const { data } = useListRepositories<ProfileData>();
           userId: user.id,
           isPublic: newRepoIsPublic,
         }),
-      });
+});
+   
 
       if (!repoRes.ok) {
         const errorData = await repoRes.json().catch(() => ({ message: "خطأ غير معروف" }));

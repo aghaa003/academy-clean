@@ -4,6 +4,7 @@ import Footer from "@/components/layout/Footer";
 import { CheckCircle, Clock, Trash2, ChevronRight, Loader2, XCircle, Star, Upload, X, Lock, Eye } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
+import { apiFetch } from "@/lib/api-fetch";
 
 const PROJ_LANG_KEYWORDS: Record<string, string[]> = {
   "C": ["int", "printf", "scanf", "return", "main", "for", "while", "if", "include"],
@@ -329,11 +330,11 @@ const getProjectHint = async (problem: string) => {
   setHintLoading(true);
   setHintText(null);
   try {
-    const res = await fetch("/api/ai/helper-projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "hint", question: problem }),
-    });
+    const res = await apiFetch("/api/ai/helper-projects", {
+  method: "POST",
+  body: JSON.stringify({ mode: "hint", question: problem }),
+});
+  
     if (res.ok) {
       const data = await res.json() as { ai_response?: string };
       setHintText(data.ai_response ?? null);
@@ -347,11 +348,11 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
   setFixLoading(true);
   setFixedCode(null);
   try {
-    const res = await fetch("/api/ai/helper-projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "fix", code, language, question: problem }),
-    });
+    const res = await apiFetch("/api/ai/helper-projects", {
+  method: "POST",
+  body: JSON.stringify({ mode: "fix", code, language, question: problem }),
+});
+ 
     if (res.ok) {
       const data = await res.json() as { fixed_code?: string };
       setFixedCode(data.fixed_code ?? null);
@@ -395,16 +396,14 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
     try {
       let data: ReviewResult;
       try {
-        const res = await fetch("/api/assignments/review", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: solution,
+        const res = await apiFetch("/api/assignments/review", {
+  method: "POST",
+  body: JSON.stringify({  code: solution,
             language: lang,
             problem,
-            problemTitle: currentAssignment.title,
-          }),
-        });
+            problemTitle: currentAssignment.title,}),
+});
+      
         if (res.ok) {
           const json = await res.json() as ReviewResult;
           data = (json && typeof json.score === "number") ? json : projectClientFallback(solution, lang, problem);
@@ -442,11 +441,9 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
     };
     if (user?.id) {
       try {
-        const res = await fetch("/api/repositories", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const res = await apiFetch("/api/repositories", {
+  method: "POST",
+  body: JSON.stringify({
             title: project.title,
             description: project.desc,
             technologies: project.tags,
@@ -455,7 +452,8 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
             isDraft: true,
             sourceProject: String(project.id),
           }),
-        });
+});
+      
         if (res.ok) {
           const data = await res.json() as { id?: number };
           entry.dbId = data.id;
@@ -512,7 +510,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
       if (uploadFile) {
         const form = new FormData();
         form.append("file", uploadFile);
-        const upRes = await fetch("/api/upload", { method: "POST", credentials: "include", body: form });
+        const upRes = await apiFetch("/api/upload", { method: "POST", body: form });
         if (upRes.ok) {
           const upData = await upRes.json() as { file?: { url: string }; url?: string };
           fileUrl = upData.file?.url ?? upData.url ?? "";
@@ -523,18 +521,17 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
       if (uploadCoverImage) {
         const form = new FormData();
         form.append("file", uploadCoverImage);
-        const upRes = await fetch("/api/upload", { method: "POST", credentials: "include", body: form });
+        const upRes = await apiFetch("/api/upload", { method: "POST", body: form });
+
         if (upRes.ok) {
           const upData = await upRes.json() as { file?: { url: string }; url?: string };
           coverImageUrl = upData.file?.url ?? upData.url ?? "";
         }
       }
 
-      const repoRes = await fetch("/api/repositories", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const repoRes = await apiFetch("/api/repositories", {
+  method: "POST",
+  body: JSON.stringify({
           title: `حل: ${project.title}`,
           description: uploadSolutionText.trim() || `حل مشروع ${project.title}`,
           technologies: project.tags,
@@ -545,7 +542,8 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
           isPublic: uploadIsPublic,
           sourceProject: String(project.id),
         }),
-      });
+});
+    
 
       if (repoRes.ok) {
         setUploadSuccess(true);

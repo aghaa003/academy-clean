@@ -20,7 +20,8 @@ import DevLinkPage from "@/pages/DevLinkPage";
 import CreatorPage from "@/pages/CreatorPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import { AuthProvider, useCurrentUser } from "@/lib/auth-context";
-
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage  from "@/pages/ResetPasswordPage";
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -57,6 +58,8 @@ function AppRouter() {
       <Route path="/devlink" component={DevLinkPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+<Route path="/reset-password"  component={ResetPasswordPage} />
     </Switch>
   );
 }

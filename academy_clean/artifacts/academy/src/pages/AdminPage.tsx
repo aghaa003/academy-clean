@@ -14,7 +14,7 @@ import {
   Trash2, CheckCircle, AlertCircle, Loader2, Paperclip, MessageCircle, ThumbsUp
 } from "lucide-react";
 import { useCreateChallenge } from "@workspace/api-client-react";
-
+import { apiFetch } from "@/lib/api-fetch";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 type AdminTab = "overview" | "users" | "courses" | "engagement" | "activity";
@@ -306,12 +306,10 @@ export default function AdminPage() {
   };
 
   const handleSetRole = async (userId: string, role: "user" | "creator" | "employer" | "admin") => {
-    await fetch(`/api/users/${userId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ role }),
-    });
+  const res = await apiFetch(`/api/users/${userId}`, {
+  method: "PATCH",
+  body: JSON.stringify({ role }),
+});
     refetchUsers();
   };
 
@@ -429,11 +427,9 @@ export default function AdminPage() {
 
   const createLessonInCourse = async (courseId: number, lesson: LessonDraft, order: number) => {
     const files = await uploadLessonFiles(lesson);
-    const res = await fetch(`/api/courses/${courseId}/lessons`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+const res = await apiFetch(`/api/courses/${courseId}/lessons`, {
+  method: "POST",
+  body: JSON.stringify({
         title: lesson.title,
         description: lesson.description || "",
         videoUrl: files.videoUrl || null,
@@ -443,7 +439,7 @@ export default function AdminPage() {
         duration: lesson.duration ? Number(lesson.duration) : null,
         order: lesson.order ? Number(lesson.order) : order,
       }),
-    });
+});
     if (!res.ok) {
       throw new Error("فشل حفظ الدرس داخل الكورس");
     }
@@ -510,7 +506,9 @@ export default function AdminPage() {
   const handleDeleteCourse = async (courseId: number) => {
     if (!window.confirm("هل تريد حذف هذا الكورس نهائياً؟")) return;
     try {
-      const res = await fetch(`${BASE}/api/courses/${courseId}`, { method: "DELETE", credentials: "include" });
+const res = await apiFetch(`${BASE}/api/courses/${courseId}`, {
+  method: "DELETE",
+});
       if (!res.ok) throw new Error("delete failed");
       refetchCourses();
     } catch {
@@ -521,8 +519,7 @@ export default function AdminPage() {
   const loadLogs = async () => {
     setLogsLoading(true);
     try {
-      const res = await fetch("/api/admin/logs", { credentials: "include" });
-      if (!res.ok) throw new Error("failed");
+const res = await apiFetch("/api/admin/logs");      if (!res.ok) throw new Error("failed");
       const data = await res.json() as { logs?: LoginLog[] };
       setLogs(data.logs ?? []);
       setLogsLoaded(true);
@@ -536,7 +533,7 @@ export default function AdminPage() {
   const loadEngagements = async () => {
     setEngagementsLoading(true);
     try {
-      const res = await fetch("/api/admin/engagements", { credentials: "include" });
+const res = await apiFetch("/api/admin/engagements");
       if (!res.ok) throw new Error("failed");
       const data = await res.json() as { engagements?: EngagementItem[] };
       setEngagements(data.engagements ?? []);
@@ -550,7 +547,7 @@ export default function AdminPage() {
   const loadComments = async () => {
     setCommentsLoading(true);
     try {
-      const res = await fetch("/api/admin/comments", { credentials: "include" });
+const res = await apiFetch("/api/admin/comments");
       if (!res.ok) throw new Error("failed");
       const data = await res.json() as { comments?: CommentModeration[] };
       setComments(data.comments ?? []);
@@ -564,7 +561,7 @@ export default function AdminPage() {
   const loadReviews = async () => {
     setReviewsLoading(true);
     try {
-      const res = await fetch("/api/admin/reviews", { credentials: "include" });
+const res = await apiFetch("/api/admin/reviews");
       if (!res.ok) throw new Error("failed");
       const data = await res.json() as { reviews?: ReviewModeration[] };
       setReviews(data.reviews ?? []);
@@ -577,22 +574,25 @@ export default function AdminPage() {
 
   const handleApproveReview = async (reviewId: string) => {
     try {
-      const res = await fetch(`/api/admin/reviews/${reviewId}/approve`, { method: "POST", credentials: "include" });
-      if (res.ok) setReviews((prev) => prev.map((r) => r.id === reviewId ? { ...r, status: "approved" } : r));
+const res = await apiFetch(`/api/admin/reviews/${reviewId}/approve`, {
+  method: "POST",
+});      if (res.ok) setReviews((prev) => prev.map((r) => r.id === reviewId ? { ...r, status: "approved" } : r));
     } catch { /* silent */ }
   };
 
   const handleRejectReview = async (reviewId: string) => {
     try {
-      const res = await fetch(`/api/admin/reviews/${reviewId}/reject`, { method: "POST", credentials: "include" });
-      if (res.ok) setReviews((prev) => prev.map((r) => r.id === reviewId ? { ...r, status: "rejected" } : r));
+const res = await apiFetch(`/api/admin/reviews/${reviewId}/reject`, {
+  method: "POST",
+});      if (res.ok) setReviews((prev) => prev.map((r) => r.id === reviewId ? { ...r, status: "rejected" } : r));
     } catch { /* silent */ }
   };
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      const res = await fetch(`/api/admin/comments/${commentId}`, { method: "DELETE", credentials: "include" });
-      if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
+const res = await apiFetch(`/api/admin/comments/${commentId}`, {
+  method: "DELETE",
+});      if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch { /* silent */ }
   };
 
@@ -601,8 +601,7 @@ export default function AdminPage() {
     try {
       const isBanned = bannedUsers.has(userId);
       const endpoint = isBanned ? `/api/admin/users/${userId}/unban` : `/api/admin/users/${userId}/ban`;
-      const res = await fetch(endpoint, { method: "POST", credentials: "include" });
-      if (res.ok) {
+const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
         setBannedUsers((prev) => {
           const next = new Set(prev);
           if (isBanned) next.delete(userId); else next.add(userId);

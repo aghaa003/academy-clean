@@ -9,6 +9,7 @@ import {
   CheckCircle, AlertCircle, Loader2, Paperclip, ShieldCheck, MessageCircle, BarChart3, ThumbsUp
 } from "lucide-react";
 import { useCreateChallenge } from "@workspace/api-client-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
@@ -233,11 +234,9 @@ export default function CreatorPage() {
         const lesson = courseLessons[i];
         if (!lesson.title) continue;
         const files = await uploadLessonFiles(lesson);
-        await fetch(`${BASE}/api/courses/${courseId}/lessons`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        await apiFetch(`${BASE}/api/courses/${courseId}/lessons`, {
+  method: "POST",
+  body: JSON.stringify({
             title: lesson.title,
             description: lesson.description || null,
             videoUrl: files.videoUrl || null,
@@ -247,7 +246,8 @@ export default function CreatorPage() {
             duration: lesson.duration ? Number(lesson.duration) : null,
             order: lesson.order ? Number(lesson.order) : i + 1,
           }),
-        });
+});
+    
       }
       setAppendCourseId(null);
       setAppendLessons((p) => ({ ...p, [courseId]: [] }));
@@ -275,7 +275,7 @@ export default function CreatorPage() {
     setViewersLoading((prev) => ({ ...prev, [courseId]: true }));
     setViewersError((prev) => ({ ...prev, [courseId]: "" }));
     try {
-      const res = await fetch(`${BASE}/api/courses/${courseId}/viewers`, { credentials: "include" });
+      const res = await apiFetch(`${BASE}/api/courses/${courseId}/viewers`);
       if (!res.ok) throw new Error("تعذر تحميل المستخدمين");
       const data = await res.json();
       setViewersByCourse((prev) => ({ ...prev, [courseId]: data }));
