@@ -84,8 +84,8 @@ interface ProfileData {
 // Add in useEffect
 useEffect(() => {
   Promise.all([
-    fetch("/api/challenges/my-submissions", { credentials: "include" }).then(r => r.ok ? r.json() : []),
-    fetch(`/api/repositories?userId=${user?.id}&limit=3`, { credentials: "include" }).then(r => r.ok ? r.json() : {}),
+    apiFetch("/api/challenges/my-submissions", ).then(r => r.ok ? r.json() : []),
+    apiFetch(`/api/repositories?userId=${user?.id}&limit=3`,).then(r => r.ok ? r.json() : {}),
   ]).then(([submissions, reposData]) => {
     const acts: any[] = [];
 
@@ -178,8 +178,6 @@ const { data } = useListRepositories<ProfileData>();
      const res = await apiFetch("/api/users/profile"
 , {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ firstName, lastName, phone, country, bio, avatarUrl }),
       });
       if (!res.ok) throw new Error("save failed");
@@ -245,7 +243,7 @@ const res = await apiFetch("/api/upload", { method: "POST", body: form });
     if (!user?.id) return;
     setReposLoading(true);
     try {
-      const res = await fetch(`/api/repositories?userId=${encodeURIComponent(user.id)}&limit=50`, { credentials: "include" });
+      const res = await apiFetch(`/api/repositories?userId=${encodeURIComponent(user.id)}&limit=50`, );
       if (res.ok) {
         const data = await res.json() as { repositories?: any[] };
         setRepos(data.repositories ?? []);

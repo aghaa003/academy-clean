@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
               <br />
               تحقق من مجلد الرسائل غير المرغوب فيها إذا لم تجد الرسالة.
             </p>
-            
+            <a
               href={basePath + "/sign-in"}
               style={{
                 display: "inline-flex",
@@ -209,7 +209,7 @@ export default function ForgotPasswordPage() {
             </form>
 
             <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
-              
+              <a
                 href={basePath + "/sign-in"}
                 style={{
                   color: "#94a3b8",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useCurrentUser } from "@/lib/auth-context";
 import { User, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const basePath = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
@@ -49,21 +50,16 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   try {
     // 1. get CSRF cookie
-    await fetch("/sanctum/csrf-cookie", { credentials: "include" });
+    await apiFetch("/sanctum/csrf-cookie",);
 
     // 2. read the token from cookie
     const xsrfToken = decodeURIComponent(getCookie("XSRF-TOKEN") ?? "");
 
     // 3. send it as a header
-    const res = await fetch("/api/login", {
+    const res = await apiFetch("/api/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-XSRF-TOKEN": xsrfToken,   // ← this is what was missing
-      },
+   
       body: JSON.stringify({ email, password }),
-      credentials: "include",
     });
 
     if (res.ok) {
@@ -149,7 +145,9 @@ const handleSubmit = async (e: React.FormEvent) => {
 
             {/* Remember + Forgot */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          href={basePath + "/forgot-password"}
+        
+          <a
+            href={basePath + "/forgot-password"}
   style={{ color: "#4f46e5", fontSize: "0.8rem", fontWeight: 600, textDecoration: "none" }}
 >
   نسيت كلمة المرور؟

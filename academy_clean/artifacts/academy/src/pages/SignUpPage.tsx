@@ -92,19 +92,15 @@ if (usernameStatus === "taken") { setError("اسم المستخدم محجوز،
 
     try {
       // 1. get CSRF cookie
-      await fetch("/sanctum/csrf-cookie", { credentials: "include" });
+      await apiFetch("/sanctum/csrf-cookie", );
 
       // 2. read the token from cookie
       const xsrfToken = decodeURIComponent(getCookie("XSRF-TOKEN") ?? "");
 
       // 3. send registration request with XSRF token header
-      const res = await fetch("/api/register", {
+      const res = await apiFetch("/api/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-XSRF-TOKEN": xsrfToken,
-        },
+    
         body: JSON.stringify({
           name: `${firstName} ${lastName}`,
           username,

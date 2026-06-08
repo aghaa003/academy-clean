@@ -34,7 +34,18 @@ export default function ResetPasswordPage() {
   const params = new URLSearchParams(window.location.search);
   const token  = params.get("token") ?? "";
   const email  = params.get("email") ?? "";
-
+const btnStyle = (disabled: boolean): React.CSSProperties => ({
+  display: "inline-block",
+  padding: "0.75rem 1.5rem",
+  background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
+  color: "white",
+  borderRadius: "12px",
+  textDecoration: "none",
+  fontWeight: 700,
+  fontSize: "0.875rem",
+  cursor: disabled ? "not-allowed" : "pointer",
+  fontFamily: "Cairo, sans-serif",
+});
   useEffect(() => {
     if (!token || !email) {
       setVerifying(false);
@@ -118,20 +129,9 @@ export default function ResetPasswordPage() {
               يرجى طلب رابط جديد.
             </p>
             
-              href={basePath + "/forgot-password"}
-              style={{
-                display: "inline-block",
-                padding: "0.75rem 1.5rem",
-                background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
-                color: "white",
-                borderRadius: "12px",
-                textDecoration: "none",
-                fontWeight: 700,
-                fontSize: "0.875rem",
-              }}
-            >
-              طلب رابط جديد
-            </a>
+<a href={basePath + "/forgot-password"} style={btnStyle(false)}>
+  طلب رابط جديد
+</a>
           </div>
         ) : done ? (
           <div style={{ textAlign: "center" }}>
@@ -144,20 +144,9 @@ export default function ResetPasswordPage() {
               يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.
             </p>
             
-              href={basePath + "/sign-in"}
-              style={{
-                display: "inline-block",
-                padding: "0.75rem 1.5rem",
-                background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
-                color: "white",
-                borderRadius: "12px",
-                textDecoration: "none",
-                fontWeight: 700,
-                fontSize: "0.875rem",
-              }}
-            >
-              تسجيل الدخول
-            </a>
+         <a href={basePath + "/sign-in"} style={btnStyle(false)}>
+  تسجيل الدخول
+</a>
           </div>
         ) : (
           <>

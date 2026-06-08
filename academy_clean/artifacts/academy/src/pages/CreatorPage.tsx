@@ -297,14 +297,14 @@ export default function CreatorPage() {
     setEngagementsLoading((prev) => ({ ...prev, [courseId]: true }));
     setEngagementsError((prev) => ({ ...prev, [courseId]: "" }));
     try {
-      const courseRes = await fetch(`${BASE}/api/courses/${courseId}`);
+      const courseRes = await apiFetch(`${BASE}/api/courses/${courseId}`);
       if (!courseRes.ok) throw new Error("تعذر تحميل التفاعلات");
       const courseData = await courseRes.json();
       const lessonRows = courseData.lessons ?? [];
       const details = await Promise.all(lessonRows.map(async (lesson: any) => {
         const [likesRes, commentsRes] = await Promise.all([
-          fetch(`${BASE}/api/lessons/${lesson.id}/likes`, { credentials: "include" }),
-          fetch(`${BASE}/api/lessons/${lesson.id}/comments`, { credentials: "include" }),
+          apiFetch(`${BASE}/api/lessons/${lesson.id}/likes`, ),
+          apiFetch(`${BASE}/api/lessons/${lesson.id}/comments`, ),
         ]);
         const likes = likesRes.ok ? await likesRes.json() : { count: 0 };
         const comments = commentsRes.ok ? await commentsRes.json() : [];
@@ -338,20 +338,19 @@ export default function CreatorPage() {
     setError("");
     setSuccess("");
     try {
-      const meRes = await fetch(`${BASE}/api/auth/me`, { credentials: "include" });
+      const meRes = await apiFetch(`${BASE}/api/auth/me`, );
       const meData = meRes.ok ? await meRes.json() : null;
       const clerkId = meData?.user?.id;
       if (!clerkId) throw new Error("تعذر التعرف على المستخدم");
 
-      const usersRes = await fetch(`${BASE}/api/users?limit=200`, { credentials: "include" });
+      const usersRes = await apiFetch(`${BASE}/api/users?limit=200`, );
       const usersData = usersRes.ok ? await usersRes.json() : null;
       const localUser = (usersData?.users ?? []).find((u: any) => u.clerkId === clerkId);
       if (!localUser) throw new Error("لم يتم العثور على ملفك الشخصي");
 
-      const courseRes = await fetch(`${BASE}/api/courses`, {
+      const courseRes = await apiFetch(`${BASE}/api/courses`, {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+      
         body: JSON.stringify({
           title: courseForm.title,
           description: courseForm.description || courseForm.title,
@@ -366,10 +365,9 @@ export default function CreatorPage() {
       for (const lesson of lessons) {
         if (!lesson.title) continue;
         const files = await uploadLessonFiles(lesson);
-        await fetch(`${BASE}/api/courses/${created.id}/lessons`, {
+        await apiFetch(`${BASE}/api/courses/${created.id}/lessons`, {
           method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
+         
           body: JSON.stringify({
             title: lesson.title,
             description: lesson.description || null,
@@ -438,17 +436,17 @@ export default function CreatorPage() {
   const loadAnalytics = async (courseId: number) => {
     setAnalyticsLoading((prev) => ({ ...prev, [courseId]: true }));
     try {
-      const courseRes = await fetch(`${BASE}/api/courses/${courseId}`, { credentials: "include" });
+      const courseRes = await apiFetch(`${BASE}/api/courses/${courseId}`,);
       if (!courseRes.ok) return;
       const courseData = await courseRes.json();
       const lessonsData = courseData.lessons ?? [];
       const [likesCounts, commentsCounts] = await Promise.all([
         Promise.all(lessonsData.map(async (lesson: any) => {
-          const res = await fetch(`${BASE}/api/lessons/${lesson.id}/likes`, { credentials: "include" });
+          const res = await apiFetch(`${BASE}/api/lessons/${lesson.id}/likes`, );
           return res.ok ? await res.json() : { count: 0 };
         })),
         Promise.all(lessonsData.map(async (lesson: any) => {
-          const res = await fetch(`${BASE}/api/lessons/${lesson.id}/comments`, { credentials: "include" });
+          const res = await apiFetch(`${BASE}/api/lessons/${lesson.id}/comments`, );
           return res.ok ? await res.json() : [];
         })),
       ]);
@@ -479,7 +477,7 @@ export default function CreatorPage() {
   const loadLessonsForCourse = async (courseId: number) => {
     setLessonsLoading((prev) => ({ ...prev, [courseId]: true }));
     try {
-      const res = await fetch(`${BASE}/api/courses/${courseId}`, { credentials: "include" });
+      const res = await apiFetch(`${BASE}/api/courses/${courseId}`, );
       if (res.ok) {
         const data = await res.json();
         setLessonsByCourse((prev) => ({ ...prev, [courseId]: data.lessons ?? [] }));
@@ -504,9 +502,8 @@ export default function CreatorPage() {
     setDeletingLesson((prev) => ({ ...prev, [lessonId]: true }));
     setDeleteError("");
     try {
-      const res = await fetch(`${BASE}/api/courses/${courseId}/lessons/${lessonId}`, {
+      const res = await apiFetch(`${BASE}/api/courses/${courseId}/lessons/${lessonId}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null) as { error?: string } | null;
@@ -532,9 +529,8 @@ export default function CreatorPage() {
     setDeleteMessage("");
     console.debug("delete-course:start", { courseId });
     try {
-      const res = await fetch(`${BASE}/api/courses/${courseId}`, {
+      const res = await apiFetch(`${BASE}/api/courses/${courseId}`, {
         method: "DELETE",
-        credentials: "include",
       });
       console.debug("delete-course:response", { courseId, status: res.status });
       if (!res.ok) {

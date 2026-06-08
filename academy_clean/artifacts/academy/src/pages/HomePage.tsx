@@ -4,6 +4,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useGetFeaturedRepositories, useGetPlatformStats, useGetLeaderboard } from "@workspace/api-client-react";
 import { Star, Map, Code2, Layers, Users, Trophy, BookOpen, GitBranch } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -56,9 +57,8 @@ export default function HomePage() {
     if (!rating || !reviewText.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const res = await fetch("/api/home-reviews", {
+      const res = await apiFetch("/api/home-reviews", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating, comment: reviewText.trim(), reviewerName: reviewerName.trim() || "زائر" }),
       });
       if (res.ok) {
