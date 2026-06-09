@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useGetFeaturedRepositories, useGetPlatformStats, useGetLeaderboard } from "@workspace/api-client-react";
 import { Star, Map, Code2, Layers, Users, Trophy, BookOpen, GitBranch } from "lucide-react";
-import { apiFetch } from "@/lib/api-fetch";
-
+import { apiFetch, apiFetch } from "@/lib/api-fetch";
+import { Link, useLocation } from "wouter";
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <div className="flex gap-1 flex-row-reverse justify-center">
@@ -41,13 +40,12 @@ export default function HomePage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [approvedReviews, setApprovedReviews] = useState<any[]>([]);
+const [, navigate] = useLocation();
 
   const { data: repos } = useGetFeaturedRepositories();
   const { data: stats } = useGetPlatformStats();
-  const { data: leaderboard } = useGetLeaderboard({ query: { queryKey: ["leaderboard"] } });
-
   useEffect(() => {
-    fetch("/api/home-reviews")
+    apiFetch("/api/home-reviews")
       .then((r) => r.ok ? r.json() : [])
       .then((data) => setApprovedReviews(Array.isArray(data) ? data : []))
       .catch(() => {});
@@ -244,11 +242,13 @@ export default function HomePage() {
                   ) : (
                     <Code2 size={48} className="text-white/20" />
                   )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button className="rounded-full px-5 py-2 text-sm font-bold text-white" style={{ background: "linear-gradient(90deg,#06b6d4,#14b8a6)" }}>
-                      معاينة المشروع
-                    </button>
-                  </div>
+           <button
+  onClick={() => navigate(`/profile/${repo.owner?.username ?? repo.owner_id ?? ""}`)}
+  className="rounded-full px-5 py-2 text-sm font-bold text-white"
+  style={{ background: "linear-gradient(90deg,#06b6d4,#14b8a6)" }}
+>
+  عرض الملف الشخصي
+</button>
                 </div>
                 <div className="p-5">
                   <div className="flex items-center gap-2 mb-3">

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
   import { Link, useLocation } from "wouter";
   import { useCurrentUser } from "@/lib/auth-context";
   import { Menu, X, ChevronDown, Code2, ShieldCheck, User, PenSquare, Search, Bell } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
   const LEARN_DROPDOWN = [
     { label: "أمثلة وتطبيقات وشروحات", href: "/examples" },
@@ -62,7 +63,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
     useEffect(() => {
       if (!user) return;
       const load = () => {
-        fetch("/api/notifications", { credentials: "include" })
+        apiFetch("/api/notifications", )
           .then((r) => r.ok ? r.json() : null)
           .then((d) => { if (d) { setNotifList(d.notifications ?? []); setUnreadCount(d.unreadCount ?? 0); } })
           .catch(() => {});
@@ -75,7 +76,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
     const openNotifications = () => {
       setNotifOpen(true);
       if (unreadCount > 0) {
-        fetch("/api/notifications/read-all", { method: "POST", credentials: "include" }).catch(() => {});
+        apiFetch("/api/notifications/read-all",  {method: "POST"}).catch(() => {});
         setUnreadCount(0);
         setNotifList((prev) => prev.map((n) => ({ ...n, read: true })));
       }
@@ -110,7 +111,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
       }
       let cancelled = false;
       setSearchLoading(true);
-      fetch(`/api/search?q=${encodeURIComponent(q)}&type=all`, { credentials: "include" })
+      apiFetch(`/api/search?q=${encodeURIComponent(q)}&type=all`, )
         .then((r) => (r.ok ? r.json() : null))
         .then((data: SearchResult | null) => {
           if (!cancelled) { setSearchResults(data); setSearchLoading(false); }

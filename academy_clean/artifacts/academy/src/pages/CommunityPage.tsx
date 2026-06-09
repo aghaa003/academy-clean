@@ -49,7 +49,8 @@ function nameInitial(name: string) {
 }
 
 const AVATAR_COLORS = ["#3730a3", "#7c3aed", "#0891b2", "#e11d48", "#16a34a", "#d97706"];
-function avatarColor(name: string) {
+function avatarColor(name: string | undefined | null) {
+  if (!name || typeof name !== 'string' || name.length === 0) return "#4f46e5";
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
@@ -232,7 +233,7 @@ const res = await apiFetch(`/api/community/posts/${postId}/comments`);
             {posts.map((post) => {
               const commentsExpanded = expandedComments.includes(post.id);
               const postComments = commentsByPost[post.id] ?? [];
-              const color = avatarColor(post.authorName);
+              const color = avatarColor(post.authorName ?? "");
               return (
                 <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="p-5">
@@ -242,11 +243,11 @@ const res = await apiFetch(`/api/community/posts/${postId}/comments`);
                       ) : (
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 text-sm"
                           style={{ backgroundColor: color }}>
-                          {nameInitial(post.authorName)}
+                          {nameInitial (post.authorName ?? "م").charAt(0)}
                         </div>
                       )}
                       <div className="text-right">
-                        <div className="font-semibold text-gray-900 text-sm">{post.authorName}</div>
+                        <div className="font-semibold text-gray-900 text-sm"> {(post.authorName ?? "م").charAt(0)}</div>
                         <div className="text-xs text-gray-400">{timeAgo(post.createdAt)}</div>
                       </div>
                     </div>

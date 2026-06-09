@@ -159,21 +159,29 @@ const { data: leaderboard } = useGetLeaderboard();
     return matchSearch && matchFilter;
   });
 useEffect(() => {
-  fetch("/api/challenges/my-submissions", { credentials: "include" })
+  apiFetch("/api/challenges/my-submissions")
     .then(res => res.ok ? res.json() : [])
     .then(data => setMySubmissions(Array.isArray(data) ? data : []))
     .catch(() => {});
 }, []);
 useEffect(() => {
-  if (mySubmissions.length === 0) return;
-  const solved = mySubmissions.filter(s => s.success).length;
-  const points = mySubmissions.filter(s => s.success).reduce((acc, s) => acc + (s.points_earned ?? 0), 0);
+  const allChallenges: any[] = Array.isArray(challenges)
+    ? challenges
+    : (challenges as any)?.challenges ?? [];
+  const solved       = mySubmissions.filter((s: any) => s.success).length;
+  const points       = mySubmissions.filter((s: any) => s.success)
+    .reduce((acc: number, s: any) => acc + (s.points_earned ?? 0), 0);
+  const easySolved   = mySubmissions.filter((s: any) => s.success && s.challenge?.difficulty === 'easy').length;
+  const mediumSolved = mySubmissions.filter((s: any) => s.success && s.challenge?.difficulty === 'medium').length;
+  const hardSolved   = mySubmissions.filter((s: any) => s.success && s.challenge?.difficulty === 'hard').length;
+  const easyTotal    = allChallenges.filter((c: any) => c.difficulty === 'easy').length;
+  const mediumTotal  = allChallenges.filter((c: any) => c.difficulty === 'medium').length;
+  const hardTotal    = allChallenges.filter((c: any) => c.difficulty === 'hard').length;
   setChallengeStats({
-    solved,
-    total: (challenges).length,
-    points,
+    solved, total: allChallenges.length, points,
     successRate: mySubmissions.length > 0 ? Math.round((solved / mySubmissions.length) * 100) : 0,
-  });
+    easySolved, easyTotal, mediumSolved, mediumTotal, hardSolved, hardTotal,
+  } as any);
 }, [mySubmissions, challenges]);
   const openChallenge = (challenge: any) => {
     setActiveChallenge(challenge);
@@ -505,27 +513,21 @@ const getHint = async () => {
             ))}
           </div>
 
-          <div className="space-y-4">
-            {[
-              { label: "المستوى الحالي", value: Math.min(myChallenges.length * 10, 100), color: "#3730a3" },
-              { label: "التحديات السهلة", value: 83, color: "#16a34a", extra: "15/18" },
-              { label: "التحديات المتوسطة", value: 58, color: "#ca8a04", extra: "7/12" },
-              { label: "التحديات الصعبة", value: 25, color: "#dc2626", extra: "2/8" },
-            ].map((bar) => (
-              <div key={bar.label}>
-                <div className="flex justify-between text-sm mb-1.5">
-                  <span className="text-gray-500">{bar.extra ?? `${bar.value}%`}</span>
-                  <span className="font-medium text-gray-700">{bar.label}</span>
-                </div>
-                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${bar.value}%`, backgroundColor: bar.color }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+      { label: "المستوى الحالي",
+  value: challengeStats.total > 0 ? Math.round((challengeStats.solved / challengeStats.total) * 100) : 0,
+  color: "#3730a3" },
+{ label: "التحديات السهلة",
+  value: (challengeStats as any).easyTotal > 0 ? Math.round(((challengeStats as any).easySolved / (challengeStats as any).easyTotal) * 100) : 0,
+  color: "#16a34a",
+  extra: `${(challengeStats as any).easySolved ?? 0}/${(challengeStats as any).easyTotal ?? 0}` },
+{ label: "التحديات المتوسطة",
+  value: (challengeStats as any).mediumTotal > 0 ? Math.round(((challengeStats as any).mediumSolved / (challengeStats as any).mediumTotal) * 100) : 0,
+  color: "#ca8a04",
+  extra: `${(challengeStats as any).mediumSolved ?? 0}/${(challengeStats as any).mediumTotal ?? 0}` },
+{ label: "التحديات الصعبة",
+  value: (challengeStats as any).hardTotal > 0 ? Math.round(((challengeStats as any).hardSolved / (challengeStats as any).hardTotal) * 100) : 0,
+  color: "#dc2626",
+  extra: `${(challengeStats as any).hardSolved ?? 0}/${(challengeStats as any).hardTotal ?? 0}` },
         </div>
 
         {/* Leaderboard */}

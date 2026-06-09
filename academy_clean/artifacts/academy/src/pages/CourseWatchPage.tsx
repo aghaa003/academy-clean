@@ -140,16 +140,17 @@ export default function CourseWatchPage() {
   }, [activeLesson?.id]);
 
   const saveProgress = useCallback(async (lessonId: number, watchedSeconds: number, completed: boolean) => {
-    if (!user) return;
-    try {
-      await apiFetch(`/api/lessons/${lessonId}/progress`, {
-        method: "POST",
-      
-        body: JSON.stringify({ watchedSeconds, completed, courseId }),
-      });
+  if (!user) return;
+  try {
+    const res = await apiFetch(`/api/lessons/${lessonId}/progress`, {
+      method: "POST",
+      body: JSON.stringify({ watchedSeconds, completed, courseId }),
+    });
+    if (res.ok) {
       setProgressMap((prev) => ({ ...prev, [lessonId]: { completed, watchedSeconds } }));
-    } catch {}
-  }, [user, courseId]);
+    }
+  } catch {}
+}, [user, courseId]);
 
   const handleVideoTimeUpdate = () => {
     const v = videoRef.current;
@@ -540,11 +541,10 @@ export default function CourseWatchPage() {
                     <div className="flex gap-3">
                       <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                         style={{ background: "linear-gradient(135deg,#3730a3,#7c3aed)" }}>
-                        {c.userName.charAt(0).toUpperCase()}
-                      </div>
+{(c.userName ?? c.user?.name ?? "م").charAt(0).toUpperCase()}                      </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-white text-sm font-semibold">{c.userName}</span>
+                          <span className="text-white text-sm font-semibold">{c.userName ?? c.user?.name ?? "مستخدم"}</span>
                           <span className="text-gray-500 text-xs">{timeAgo(c.createdAt)}</span>
                         </div>
                         <p className="text-gray-300 text-sm leading-relaxed">{c.content}</p>
@@ -564,11 +564,10 @@ export default function CourseWatchPage() {
                       <div key={reply.id} className="flex gap-3 pr-12">
                         <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                           style={{ background: "linear-gradient(135deg,#6d28d9,#a855f7)" }}>
-                          {reply.userName.charAt(0).toUpperCase()}
-                        </div>
+{(reply.userName ?? reply.user?.name ?? "م").charAt(0).toUpperCase()}                        </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-white text-xs font-semibold">{reply.userName}</span>
+                            <span className="text-white text-xs font-semibold">{reply.userName ?? reply.user?.name ?? "مستخدم"}</span>
                             <span className="text-gray-500 text-xs">{timeAgo(reply.createdAt)}</span>
                           </div>
                           <p className="text-gray-300 text-xs leading-relaxed">{reply.content}</p>

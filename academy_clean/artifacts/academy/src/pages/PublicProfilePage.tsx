@@ -6,6 +6,7 @@ import {
   Trophy, Code2, Star, FolderGit2, BookOpen, Loader2,
   ExternalLink, FileText, Download, Globe,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -83,7 +84,7 @@ export default function PublicProfilePage() {
     if (!userId) return;
     setLoading(true);
     setError(null);
-    fetch(`/api/users/${encodeURIComponent(userId)}`, { credentials: "include" })
+    apiFetch(`/api/users/${encodeURIComponent(userId)}`, )
       .then(async (res) => {
         if (res.status === 403) { setError("هذا الحساب غير متاح للعرض العام"); return; }
         if (!res.ok) { setError("المستخدم غير موجود"); return; }
@@ -97,7 +98,7 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!userId) return;
     setReposLoading(true);
-    fetch(`/api/repositories?userId=${encodeURIComponent(userId)}&limit=50`, { credentials: "include" })
+    apiFetch(`/api/repositories?userId=${encodeURIComponent(userId)}&limit=50`, )
       .then(async (res) => {
         if (!res.ok) return;
         const data = await res.json();

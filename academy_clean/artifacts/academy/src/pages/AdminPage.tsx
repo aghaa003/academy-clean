@@ -148,31 +148,18 @@ function newLesson(): LessonDraft {
 }
 
 async function uploadFile(file: File, onProgress?: (p: number) => void): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const form = new FormData();
-    form.append("file", file);
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
-    });
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const data = JSON.parse(xhr.responseText);
-        resolve(data.file?.url ?? data.url ?? "");
-      } else {
-        reject(new Error("فشل رفع الملف"));
-      }
-    });
-   xhr.addEventListener("error", () => reject(new Error("خطأ في الاتصال")));
-
-xhr.open("POST", `${BASE}/api/upload`);
-
-xhr.withCredentials = true;
-
-xhr.setRequestHeader("X-Upload-Mode", "lesson");
-
-xhr.send(form);
-  });
+  if (onProgress) onProgress(10);
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const res = await apiFetch("/api/upload", { method: "POST", body: form });
+    if (!res.ok) throw new Error("فشل رفع الملف");
+    if (onProgress) onProgress(100);
+    const data = await res.json();
+    return data.file?.url ?? data.url ?? "";
+  } catch {
+    throw new Error("فشل رفع الملف");
+  }
 }
 
 export default function AdminPage() {
