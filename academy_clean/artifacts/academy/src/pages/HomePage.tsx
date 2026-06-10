@@ -47,7 +47,10 @@ const [, navigate] = useLocation();
   useEffect(() => {
     apiFetch("/api/home-reviews")
       .then((r) => r.ok ? r.json() : [])
-      .then((data) => setApprovedReviews(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : (data?.reviews ?? []);
+        setApprovedReviews(Array.isArray(list) ? list : []);
+      })
       .catch(() => {});
   }, []);
 
@@ -243,7 +246,7 @@ const [, navigate] = useLocation();
                     <Code2 size={48} className="text-white/20" />
                   )}
            <button
-  onClick={() => navigate(`/profile/${repo.owner?.username ?? repo.owner_id ?? ""}`)}
+  onClick={() => navigate(`/users/${repo.owner?.id ?? repo.owner_id ?? ""}`)}
   className="rounded-full px-5 py-2 text-sm font-bold text-white"
   style={{ background: "linear-gradient(90deg,#06b6d4,#14b8a6)" }}
 >
@@ -253,9 +256,9 @@ const [, navigate] = useLocation();
                 <div className="p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                      {repo.ownerName?.charAt(0) ?? "م"}
+                      {(repo.ownerName ?? repo.owner?.name)?.charAt(0) ?? "م"}
                     </div>
-                    <span className="text-sm text-gray-500">{repo.ownerName}</span>
+                    <span className="text-sm text-gray-500">{repo.ownerName ?? repo.owner?.name}</span>
                   </div>
                   <h3 className="font-bold text-gray-900 mb-1 text-right">{repo.title}</h3>
                   <p className="text-gray-500 text-sm mb-3 text-right line-clamp-2">{repo.description}</p>
@@ -330,10 +333,10 @@ const [, navigate] = useLocation();
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
                       style={{ background: "linear-gradient(135deg,#3730a3,#7c3aed)" }}>
-                      {(rev.reviewerName ?? "ز").charAt(0)}
+                      {(rev.reviewerName ?? rev.reviewer_name ?? rev.user?.name ?? "ز").charAt(0)}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-800 text-sm">{rev.reviewerName ?? "زائر"}</p>
+                      <p className="font-semibold text-gray-800 text-sm">{rev.reviewerName ?? rev.reviewer_name ?? rev.user?.name ?? "زائر"}</p>
                       <div className="flex gap-0.5 mt-0.5">
                         {[1,2,3,4,5].map((s) => (
                           <Star key={s} size={12} fill={s <= rev.rating ? "#f59e0b" : "none"}

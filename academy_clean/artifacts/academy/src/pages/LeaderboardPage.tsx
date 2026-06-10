@@ -8,7 +8,7 @@ const RANK_COLORS = ["#f59e0b", "#94a3b8", "#cd7c2a"];
 const AVATAR_COLORS = ["#3730a3", "#7c3aed", "#0891b2", "#16a34a", "#e11d48", "#f59e0b", "#0d9488"];
 
 export default function LeaderboardPage() {
-  const { data: leaderboard, isLoading } = useGetLeaderboard({ query: { queryKey: ["leaderboard", "full"] } });
+  const { data: leaderboard, isLoading } = useGetLeaderboard(undefined, { query: { queryKey: ["leaderboard", "full"] } });
 
   return (
     <div className="min-h-screen flex flex-col" dir="rtl">

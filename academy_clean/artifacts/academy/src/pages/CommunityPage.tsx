@@ -4,11 +4,14 @@ import { Link } from "wouter";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
-import { Heart, MessageCircle, Plus, X, Send, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, Plus, X, Send, Loader2, Search } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 const API = BASE;
+
+const POST_CATEGORIES = ["سؤال", "مشكلة برمجية", "مشروع", "نقاش", "أخرى"];
+const CATEGORY_FILTERS = ["الكل", ...POST_CATEGORIES];
 
 interface Post {
   id: number;
@@ -16,6 +19,7 @@ interface Post {
   title: string;
   body: string;
   tags: string[];
+  category: string | null;
   likesCount: number;
   commentsCount: number;
   createdAt: string;
@@ -34,8 +38,11 @@ interface Comment {
   authorAvatar: string | null;
 }
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function timeAgo(dateStr: string | null | undefined) {
+  if (!dateStr) return "";
+  const time = new Date(dateStr).getTime();
+  if (Number.isNaN(time)) return "";
+  const diff = Date.now() - time;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "الآن";
   if (mins < 60) return `منذ ${mins} دقيقة`;
@@ -64,7 +71,10 @@ export default function CommunityPage() {
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
   const [newTags, setNewTags] = useState("");
+  const [newCategory, setNewCategory] = useState(POST_CATEGORIES[0]);
   const [publishing, setPublishing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("الكل");
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
   const [commentsByPost, setCommentsByPost] = useState<Record<number, Comment[]>>({});
   const [commentTexts, setCommentTexts] = useState<Record<number, string>>({});
@@ -75,12 +85,18 @@ export default function CommunityPage() {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-const res = await apiFetch(`/api/community/posts`);
+      const params = new URLSearchParams();
+      if (search.trim()) params.set("search", search.trim());
+      if (activeCategory !== "الكل") params.set("category", activeCategory);
+      const res = await apiFetch(`/api/community/posts?${params.toString()}`);
       if (res.ok) setPosts(await res.json());
     } catch {} finally { setLoading(false); }
-  }, []);
+  }, [search, activeCategory]);
 
-  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+  useEffect(() => {
+    const timeout = setTimeout(fetchPosts, 300);
+    return () => clearTimeout(timeout);
+  }, [fetchPosts]);
 
   const publishPost = async () => {
     if (!newTitle.trim() || !newBody.trim() || !user || publishing) return;
@@ -89,14 +105,14 @@ const res = await apiFetch(`/api/community/posts`);
       const tags = newTags.split(",").map((t) => t.trim()).filter(Boolean);
       const res = await apiFetch(`/api/community/posts`, {
   method: "POST",
-  body: JSON.stringify({ title: newTitle.trim(), body: newBody.trim(), tags }),
+  body: JSON.stringify({ title: newTitle.trim(), body: newBody.trim(), tags, category: newCategory }),
 });
-   
+
       if (res.ok) {
         const post = await res.json();
         setPosts((prev) => [post, ...prev]);
         setShowForm(false);
-        setNewTitle(""); setNewBody(""); setNewTags("");
+        setNewTitle(""); setNewBody(""); setNewTags(""); setNewCategory(POST_CATEGORIES[0]);
       }
     } finally { setPublishing(false); }
   };
@@ -199,6 +215,15 @@ const res = await apiFetch(`/api/community/posts/${postId}/comments`);
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5 text-right">التصنيف</label>
+                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    {POST_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5 text-right">الوسوم (افصل بفاصلة)</label>
                   <input value={newTags} onChange={(e) => setNewTags(e.target.value)}
                     placeholder="مثال: React, JavaScript, CSS"
@@ -216,6 +241,34 @@ const res = await apiFetch(`/api/community/posts/${postId}/comments`);
           </div>
         )}
 
+        {/* Search and category filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center">
+          <div className="relative w-full sm:max-w-xs">
+            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ابحث في المشاركات..."
+              className="w-full border border-gray-200 rounded-xl pr-10 pl-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+          <div className="flex gap-2 flex-wrap justify-center">
+            {CATEGORY_FILTERS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setActiveCategory(c)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                  activeCategory === c
+                    ? "bg-indigo-600 text-white shadow"
+                    : "bg-white border border-gray-200 text-gray-600 hover:border-indigo-300"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Posts feed */}
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400 gap-3">
@@ -225,8 +278,12 @@ const res = await apiFetch(`/api/community/posts/${postId}/comments`);
         ) : posts.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
             <MessageCircle size={48} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 font-medium">لا توجد مشاركات بعد</p>
-            <p className="text-gray-400 text-sm mt-1">كن أول من يبدأ النقاش!</p>
+            <p className="text-gray-500 font-medium">
+              {search.trim() || activeCategory !== "الكل" ? "لا توجد نتائج مطابقة" : "لا توجد مشاركات بعد"}
+            </p>
+            <p className="text-gray-400 text-sm mt-1">
+              {search.trim() || activeCategory !== "الكل" ? "جرّب تعديل البحث أو التصنيف" : "كن أول من يبدأ النقاش!"}
+            </p>
           </div>
         ) : (
           <div className="space-y-5">
@@ -243,16 +300,21 @@ const res = await apiFetch(`/api/community/posts/${postId}/comments`);
                       ) : (
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 text-sm"
                           style={{ backgroundColor: color }}>
-                          {nameInitial (post.authorName ?? "م").charAt(0)}
+                          {nameInitial(post.authorName ?? "م")}
                         </div>
                       )}
                       <div className="text-right">
-                        <div className="font-semibold text-gray-900 text-sm"> {(post.authorName ?? "م").charAt(0)}</div>
+                        <div className="font-semibold text-gray-900 text-sm">{post.authorName ?? "مستخدم مجهول"}</div>
                         <div className="text-xs text-gray-400">{timeAgo(post.createdAt)}</div>
                       </div>
                     </div>
 
-                    <h3 className="font-bold text-gray-900 text-right mb-2">{post.title}</h3>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      {post.category && (
+                        <span className="text-xs font-bold text-indigo-700 bg-indigo-100 rounded-full px-3 py-1">{post.category}</span>
+                      )}
+                      <h3 className="font-bold text-gray-900 text-right flex-1">{post.title}</h3>
+                    </div>
                     <p className="text-gray-600 text-sm leading-relaxed text-right whitespace-pre-line">{post.body}</p>
 
                     {post.tags.length > 0 && (

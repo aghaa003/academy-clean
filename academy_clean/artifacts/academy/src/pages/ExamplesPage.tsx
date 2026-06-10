@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
-import { useListRepositories } from "@workspace/api-client-react";
-import { Search, ChevronDown, ChevronUp, Code2 } from "lucide-react";
+import { useCurrentUser } from "@/lib/auth-context";
+import { apiFetch } from "@/lib/api-fetch";
+import { Search, ChevronDown, ChevronUp, Code2, Copy, Terminal, Check, Plus, Trash2, X } from "lucide-react";
 
 const FILTERS = ["الكل", "Frontend", "Backend", "تطبيقات الجوال", "الخوارزميات"];
 
@@ -20,80 +21,106 @@ const TECH_COLORS: Record<string, string> = {
   "Firebase": "#f97316", "Dart": "#06b6d4", "Socket.io": "#374151", "Express": "#6b7280",
 };
 
-const FEATURED_EXAMPLES = [
-  {
-    title: "بناء صفحة تسجيل دخول",
-    description: "مثال عملي يوضح إنشاء نموذج تسجيل دخول متجاوب مع React وTypeScript.",
-    category: "Frontend",
-    code: `import { useState } from "react";
-
-export default function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  return (
-    <form>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-    </form>
-  );
-}`,
-  },
-  {
-    title: "REST API بسيطة",
-    description: "مثال يشرح كيفية إنشاء نقطة نهاية GET باستخدام Node.js وExpress.",
-    category: "Backend",
-    code: `import express from "express";
-
-const app = express();
-
-app.get("/api/hello", (_req, res) => {
-  res.json({ message: "Hello from API" });
-});`,
-  },
-  {
-    title: "لوحة بيانات تفاعلية",
-    description: "مثال يوضح عرض إحصائيات أساسية باستخدام React ومكونات قابلة لإعادة الاستخدام.",
-    category: "Frontend",
-    code: `const stats = [
-  { label: "المشاريع", value: 12 },
-  { label: "الطلاب", value: 48 },
-  { label: "الإنجازات", value: 27 },
-];`,
-  },
-  {
-    title: "استعلام SQL لعرض المستخدمين",
-    description: "مثال عملي لقراءة البيانات من جدول المستخدمين بترتيب تنازلي.",
-    category: "Backend",
-    code: `SELECT id, name, email
-FROM users
-ORDER BY created_at DESC;`,
-  },
-  {
-    title: "قالب صفحة هبوط",
-    description: "مثال سريع لصفحة هبوط HTML وCSS مع قسم رئيسي وزر دعوة لاتخاذ إجراء.",
-    category: "تطبيقات الجوال",
-    code: `<section class="hero">
-  <h1>تعلم البرمجة</h1>
-  <button>ابدأ الآن</button>
-</section>`,
-  },
-];
+interface ExampleItem {
+  id: number;
+  title: string;
+  description: string | null;
+  category: string;
+  code: string;
+  install_command: string | null;
+  technologies: string[] | null;
+}
 
 export default function ExamplesPage() {
+  const { user } = useCurrentUser();
+  const canManage = user?.role === "admin" || user?.role === "employer";
+
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("الكل");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [examples, setExamples] = useState<ExampleItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const { data, isLoading } = useListRepositories({ query: { queryKey: ["repositories"] } });
-  const repos = data?.repositories ?? [];
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newCategory, setNewCategory] = useState("Frontend");
+  const [newCode, setNewCode] = useState("");
+  const [newInstall, setNewInstall] = useState("");
+  const [newTechs, setNewTechs] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const filtered = repos.filter((r) =>
-    (!search || r.title.toLowerCase().includes(search.toLowerCase()) || (r.description ?? "").toLowerCase().includes(search.toLowerCase()))
-  );
-  const featuredExamples = FEATURED_EXAMPLES.filter((item) =>
-    activeFilter === "الكل" ? true : item.category === activeFilter || item.title.includes(activeFilter)
-  );
+  const fetchExamples = () => {
+    setIsLoading(true);
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (activeFilter !== "الكل") params.set("category", activeFilter);
+
+    apiFetch(`/api/examples?${params.toString()}`)
+      .then((r) => (r.ok ? r.json() : { examples: [] }))
+      .then((data) => setExamples(Array.isArray(data?.examples) ? data.examples : []))
+      .catch(() => setExamples([]))
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(fetchExamples, 300);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, activeFilter]);
+
+  const handleCopy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch {
+      /* clipboard not available */
+    }
+  };
+
+  const handleAddExample = async () => {
+    if (!newTitle.trim() || !newCode.trim() || saving) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch("/api/examples", {
+        method: "POST",
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          description: newDescription.trim() || null,
+          category: newCategory,
+          code: newCode,
+          install_command: newInstall.trim() || null,
+          technologies: newTechs.split(",").map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      if (res.ok) {
+        setNewTitle("");
+        setNewDescription("");
+        setNewCategory("Frontend");
+        setNewCode("");
+        setNewInstall("");
+        setNewTechs("");
+        setShowAddForm(false);
+        fetchExamples();
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteExample = async (id: number) => {
+    if (!confirm("هل أنت متأكد من حذف هذا المثال؟")) return;
+    try {
+      const res = await apiFetch(`/api/examples/${id}`, { method: "DELETE" });
+      if (res.ok) setExamples((prev) => prev.filter((e) => e.id !== id));
+    } catch {
+      /* silent */
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col" dir="rtl">
@@ -140,65 +167,128 @@ export default function ExamplesPage() {
                 </button>
               ))}
             </div>
+            {canManage && (
+              <button
+                onClick={() => setShowAddForm((v) => !v)}
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:shadow-md"
+                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
+                data-testid="button-add-example"
+              >
+                {showAddForm ? <X size={16} /> : <Plus size={16} />}
+                {showAddForm ? "إلغاء" : "إضافة مثال"}
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
-            {featuredExamples.map((item, index) => (
-              <div key={index} className="bg-gradient-to-br from-white to-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <span className="text-xs font-bold text-indigo-700 bg-indigo-100 rounded-full px-3 py-1">{item.category}</span>
-                  <Code2 size={18} className="text-indigo-500" />
-                </div>
-                <h3 className="font-bold text-gray-900 text-right mb-2">{item.title}</h3>
-                <p className="text-sm text-gray-600 text-right leading-relaxed mb-4">{item.description}</p>
-                <div className="bg-gray-900 rounded-xl p-4 text-[11px] font-mono text-green-400 overflow-x-auto">
-                  <pre>{item.code}</pre>
-                </div>
+          {/* Add example form (admin/employer only) */}
+          {canManage && showAddForm && (
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mb-8">
+              <h3 className="font-bold text-gray-900 mb-4 text-right">إضافة مثال جديد</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="عنوان المثال"
+                  className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <select
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  {FILTERS.filter((f) => f !== "الكل").map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
               </div>
-            ))}
-          </div>
+              <textarea
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="وصف مختصر للمثال"
+                rows={2}
+                className="w-full border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4 resize-none"
+              />
+              <textarea
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                placeholder="الكود البرمجي"
+                rows={6}
+                className="w-full border border-gray-200 rounded-xl p-3 text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4 resize-none"
+                dir="ltr"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <input
+                  value={newInstall}
+                  onChange={(e) => setNewInstall(e.target.value)}
+                  placeholder="أمر التثبيت (اختياري) مثل: npm install react"
+                  className="border border-gray-200 rounded-xl p-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  dir="ltr"
+                />
+                <input
+                  value={newTechs}
+                  onChange={(e) => setNewTechs(e.target.value)}
+                  placeholder="التقنيات (مفصولة بفواصل) مثل: React, TypeScript"
+                  className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+              </div>
+              <button
+                onClick={handleAddExample}
+                disabled={!newTitle.trim() || !newCode.trim() || saving}
+                className="rounded-xl px-6 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
+              >
+                {saving ? "جاري الحفظ..." : "حفظ المثال"}
+              </button>
+            </div>
+          )}
 
-          {/* Grid */}
+          {/* Examples grid */}
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-gray-100 rounded-2xl h-80 animate-pulse" />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-gray-100 rounded-2xl h-64 animate-pulse" />
               ))}
             </div>
+          ) : examples.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-lg font-medium">لا توجد أمثلة مطابقة</p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map((repo, idx) => {
-                const diff = DIFFICULTY_MAP[idx % 3];
-                const isExpanded = expandedId === repo.id;
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {examples.map((item, index) => {
+                const diff = DIFFICULTY_MAP[index % 3];
+                const isExpanded = expandedId === item.id;
                 return (
-                  <div
-                    key={repo.id}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-                    data-testid={`card-example-${repo.id}`}
-                  >
-                    {/* Image */}
-                    <div
-                      className="h-40 relative flex items-center justify-center"
-                      style={{ background: "linear-gradient(135deg,#1e1b4b,#3730a3)" }}
-                    >
-                      <Code2 size={36} className="text-white/20" />
-                      <div
-                        className="absolute top-3 right-3 text-xs font-bold rounded-full px-2.5 py-1"
-                        style={{ backgroundColor: diff.bg, color: diff.text }}
-                      >
-                        {diff.label}
-                      </div>
-                    </div>
-                    <div className="p-5">
-                      <div className="flex justify-end mb-2">
-                        <span className="text-xs font-semibold border border-indigo-200 text-indigo-600 rounded-full px-2.5 py-1">
-                          {repo.technologies?.[0] ?? "برمجة"}
+                  <div key={item.id} className="bg-gradient-to-br from-white to-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-xs font-bold rounded-full px-2.5 py-1"
+                          style={{ backgroundColor: diff.bg, color: diff.text }}
+                        >
+                          {diff.label}
                         </span>
+                        {canManage && (
+                          <button
+                            onClick={() => handleDeleteExample(item.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                            data-testid={`button-delete-example-${item.id}`}
+                            title="حذف المثال"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
-                      <h3 className="font-bold text-gray-900 mb-1.5 text-right">{repo.title}</h3>
-                      <p className="text-gray-500 text-sm mb-3 text-right line-clamp-2">{repo.description}</p>
-                      <div className="flex flex-wrap gap-1.5 justify-end mb-4">
-                        {(repo.technologies ?? []).map((tech) => (
+                      <span className="text-xs font-bold text-indigo-700 bg-indigo-100 rounded-full px-3 py-1">{item.category}</span>
+                      <Code2 size={18} className="text-indigo-500" />
+                    </div>
+                    <h3 className="font-bold text-gray-900 text-right mb-2">{item.title}</h3>
+                    {item.description && (
+                      <p className="text-sm text-gray-600 text-right leading-relaxed mb-3">{item.description}</p>
+                    )}
+                    {item.technologies && item.technologies.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 justify-end mb-3">
+                        {item.technologies.map((tech) => (
                           <span
                             key={tech}
                             className="text-xs rounded-full px-2.5 py-0.5 border font-medium"
@@ -208,29 +298,50 @@ export default function ExamplesPage() {
                           </span>
                         ))}
                       </div>
+                    )}
+
+                    <div className="relative bg-gray-900 rounded-xl p-4 text-[11px] font-mono text-green-400 overflow-x-auto">
                       <button
-                        onClick={() => setExpandedId(isExpanded ? null : repo.id)}
-                        className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-indigo-50 transition-colors"
-                        data-testid={`button-show-code-${repo.id}`}
+                        onClick={() => handleCopy(item.code, `code-${item.id}`)}
+                        className="absolute top-2 left-2 flex items-center gap-1 rounded-lg bg-white/10 hover:bg-white/20 text-white px-2 py-1 text-[10px] transition-colors"
+                        data-testid={`button-copy-code-${item.id}`}
+                      >
+                        {copiedKey === `code-${item.id}` ? <Check size={12} /> : <Copy size={12} />}
+                        {copiedKey === `code-${item.id}` ? "تم النسخ" : "نسخ"}
+                      </button>
+                      <pre className={isExpanded ? "" : "max-h-32 overflow-hidden"}>{item.code}</pre>
+                    </div>
+
+                    {item.code.split("\n").length > 6 && (
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                        className="w-full mt-2 flex items-center justify-center gap-2 border border-indigo-200 text-indigo-600 rounded-xl py-2 text-sm font-semibold hover:bg-indigo-50 transition-colors"
+                        data-testid={`button-show-code-${item.id}`}
                       >
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        عرض الكود
+                        {isExpanded ? "إخفاء الكود" : "عرض الكود كاملاً"}
                       </button>
-                      {isExpanded && (
-                        <div className="mt-3 bg-gray-900 rounded-xl p-4 text-xs font-mono text-green-400 text-left overflow-x-auto">
-                          <pre>{`// ${repo.title}\n// تقنيات: ${(repo.technologies ?? []).join(", ")}\n\nfunction main() {\n  console.log("مرحباً!");\n}\n\nmain();`}</pre>
+                    )}
+
+                    {item.install_command && (
+                      <div className="relative mt-3 flex items-center justify-between gap-2 bg-gray-100 rounded-xl px-3 py-2 text-left" dir="ltr">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Terminal size={14} className="text-gray-500 shrink-0" />
+                          <code className="text-xs text-gray-700 truncate">{item.install_command}</code>
                         </div>
-                      )}
-                    </div>
+                        <button
+                          onClick={() => handleCopy(item.install_command!, `install-${item.id}`)}
+                          className="shrink-0 flex items-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 text-[10px] transition-colors"
+                          data-testid={`button-copy-install-${item.id}`}
+                        >
+                          {copiedKey === `install-${item.id}` ? <Check size={12} /> : <Copy size={12} />}
+                          {copiedKey === `install-${item.id}` ? "تم" : "تثبيت"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
-
-              {filtered.length === 0 && (
-                <div className="col-span-3 text-center py-16 text-gray-400">
-                  <p className="text-lg font-medium">لا توجد نتائج مطابقة</p>
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -2,11 +2,11 @@ import { useState, useRef,useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
-import { useListChallenges, useGetLeaderboard } from "@workspace/api-client-react";
+import { useListChallenges, useGetLeaderboard, useGetPlatformStats } from "@workspace/api-client-react";
 import { useCurrentUser } from "@/lib/auth-context";
 import {
   Search, Star, Trophy, Users, Code2, CheckCircle, Database, Globe, Cpu,
-  X, Loader2, XCircle, Upload, Lock, Eye, Info,
+  X, Loader2, XCircle, Upload, Lock, Eye, Info, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -150,14 +150,24 @@ const [mySubmissions, setMySubmissions] = useState<any[]>([]);
 const [challengeStats, setChallengeStats] = useState({
   solved: 0, total: 0, points: 0, successRate: 0
 });
-const { data, isLoading } = useListChallenges();
+const PAGE_SIZE = 9;
+const [page, setPage] = useState(1);
+const { data, isLoading } = useListChallenges({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+const { data: allChallengesData } = useListChallenges({ limit: 1000 });
 const { data: leaderboard } = useGetLeaderboard();
+const { data: platformStats } = useGetPlatformStats();
   const challenges = data?.challenges ?? [];
+  const totalChallenges = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalChallenges / PAGE_SIZE));
   const filtered = challenges.filter((c) => {
     const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase());
     const matchFilter = activeFilter === "الكل" || c.category === activeFilter;
     return matchSearch && matchFilter;
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeFilter]);
 useEffect(() => {
   apiFetch("/api/challenges/my-submissions")
     .then(res => res.ok ? res.json() : [])
@@ -165,9 +175,7 @@ useEffect(() => {
     .catch(() => {});
 }, []);
 useEffect(() => {
-  const allChallenges: any[] = Array.isArray(challenges)
-    ? challenges
-    : (challenges as any)?.challenges ?? [];
+  const allChallenges: any[] = allChallengesData?.challenges ?? [];
   const solved       = mySubmissions.filter((s: any) => s.success).length;
   const points       = mySubmissions.filter((s: any) => s.success)
     .reduce((acc: number, s: any) => acc + (s.points_earned ?? 0), 0);
@@ -178,11 +186,11 @@ useEffect(() => {
   const mediumTotal  = allChallenges.filter((c: any) => c.difficulty === 'medium').length;
   const hardTotal    = allChallenges.filter((c: any) => c.difficulty === 'hard').length;
   setChallengeStats({
-    solved, total: allChallenges.length, points,
+    solved, total: allChallengesData?.total ?? allChallenges.length, points,
     successRate: mySubmissions.length > 0 ? Math.round((solved / mySubmissions.length) * 100) : 0,
     easySolved, easyTotal, mediumSolved, mediumTotal, hardSolved, hardTotal,
   } as any);
-}, [mySubmissions, challenges]);
+}, [mySubmissions, allChallengesData]);
   const openChallenge = (challenge: any) => {
     setActiveChallenge(challenge);
     setSolution("");
@@ -336,10 +344,10 @@ const getHint = async () => {
       <section className="bg-white py-8 px-4 border-b border-gray-100">
         <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { icon: <Star size={28} className="text-amber-400" />, value: "4.8", label: "تقييم المستخدمين" },
-            { icon: <Trophy size={28} className="text-indigo-600" />, value: "32,580", label: "تحدي مكتمل" },
-            { icon: <Users size={28} className="text-teal-600" />, value: "5,240", label: "مبرمج نشط" },
-            { icon: <Code2 size={28} className="text-purple-600" />, value: "+150", label: "تحدي برمجي" },
+            { icon: <Star size={28} className="text-amber-400" />, value: `${Math.round((platformStats as any)?.successRate ?? 0)}%`, label: "معدل نجاح الحلول" },
+            { icon: <Trophy size={28} className="text-indigo-600" />, value: (platformStats?.totalChallengesSolved ?? 0).toLocaleString(), label: "تحدي مكتمل" },
+            { icon: <Users size={28} className="text-teal-600" />, value: (platformStats?.totalUsers ?? 0).toLocaleString(), label: "مبرمج نشط" },
+            { icon: <Code2 size={28} className="text-purple-600" />, value: `+${platformStats?.totalChallenges ?? 0}`, label: "تحدي برمجي" },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -484,6 +492,46 @@ const getHint = async () => {
                 <p className="text-lg font-medium">لا توجد تحديات مطابقة</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!isLoading && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8" data-testid="pagination-challenges">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold border border-gray-200 text-gray-600 hover:border-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              data-testid="button-prev-page"
+            >
+              <ChevronRight size={16} />
+              السابق
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`w-9 h-9 rounded-full text-sm font-semibold transition-all ${
+                    p === page
+                      ? "bg-indigo-600 text-white shadow"
+                      : "bg-white border border-gray-200 text-gray-600 hover:border-indigo-300"
+                  }`}
+                  data-testid={`button-page-${p}`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold border border-gray-200 text-gray-600 hover:border-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              data-testid="button-next-page"
+            >
+              التالي
+              <ChevronLeft size={16} />
+            </button>
           </div>
         )}
       </section>

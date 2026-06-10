@@ -18,6 +18,8 @@ export interface CurrentUser {
   github_url: string | null;
   linkedin_url: string | null;
   website_url: string | null;
+  phone: string | null;
+  country: string | null;
   skills: string[] | null;
   role: "user" | "creator" | "employer" | "admin";
   points: number;
@@ -60,6 +62,8 @@ const full  = raw.fullName  ?? raw.name ?? ([first, last].filter(Boolean).join("
     github_url:     raw.github_url ?? null,
     linkedin_url:   raw.linkedin_url ?? null,
     website_url:    raw.website_url ?? null,
+    phone:          raw.phone ?? null,
+    country:        raw.country ?? null,
     skills:         raw.skills ?? null,
     role:           (raw.role as CurrentUser["role"]) ?? "user",
     points:         raw.points ?? 0,

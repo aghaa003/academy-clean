@@ -112,7 +112,12 @@ export default function CourseWatchPage() {
     } catch {}
   }, [user, courseId]);
 
-  useEffect(() => { fetchCourseProgress(); }, [fetchCourseProgress]);
+  useEffect(() => {
+    if (!user || !courseId) return;
+    apiFetch(`/api/courses/${courseId}/enroll`, { method: "POST" })
+      .catch(() => {})
+      .finally(() => fetchCourseProgress());
+  }, [user, courseId, fetchCourseProgress]);
 
   const fetchComments = useCallback(async (lessonId: number) => {
     try {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
   import { Link, useLocation } from "wouter";
   import { useCurrentUser } from "@/lib/auth-context";
-  import { Menu, X, ChevronDown, Code2, ShieldCheck, User, PenSquare, Search, Bell } from "lucide-react";
+  import { Menu, X, ChevronDown, Code2, ShieldCheck, User, PenSquare, Search, Bell, FolderGit2 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
   const LEARN_DROPDOWN = [
@@ -23,6 +23,7 @@ import { apiFetch } from "@/lib/api-fetch";
   interface SearchResult {
     users: { id: string; name?: string; username?: string }[];
     courses: { id: string | number; title?: string; category?: string }[];
+    repositories: { id: string | number; title?: string; description?: string; owner?: { id: string; name?: string; username?: string } }[];
   }
 
   function useDebounce<T>(value: T, ms: number): T {
@@ -72,6 +73,30 @@ import { apiFetch } from "@/lib/api-fetch";
       const timer = setInterval(load, 60_000);
       return () => clearInterval(timer);
     }, [user]);
+
+    const getNotificationLink = (n: any): string | null => {
+      switch (n.type) {
+        case "post_like":
+        case "post_comment":
+          return "/community";
+        case "course_review":
+          return n.entityId ? `/courses/${n.entityId}` : null;
+        default:
+          return null;
+      }
+    };
+
+    const handleNotificationClick = (n: any) => {
+      if (!n.read) {
+        apiFetch(`/api/notifications/${n.id}/read`, { method: "POST" }).catch(() => {});
+        setNotifList((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+      }
+      const link = getNotificationLink(n);
+      if (link) {
+        navigate(link);
+        setNotifOpen(false);
+      }
+    };
 
     const openNotifications = () => {
       setNotifOpen(true);
@@ -132,7 +157,9 @@ import { apiFetch } from "@/lib/api-fetch";
     }, []);
 
     const hasResults = searchResults && (
-      (searchResults.courses?.length ?? 0) > 0 || (searchResults.users?.length ?? 0) > 0
+      (searchResults.courses?.length ?? 0) > 0 ||
+      (searchResults.users?.length ?? 0) > 0 ||
+      (searchResults.repositories?.length ?? 0) > 0
     );
     const showDropdown = searchOpen && debouncedQuery.trim().length >= 2;
 
@@ -179,17 +206,23 @@ import { apiFetch } from "@/lib/api-fetch";
                         ) : notifList.length === 0 ? (
                           <div className="px-4 py-6 text-center text-gray-400 text-sm">لا توجد إشعارات حتى الآن</div>
                         ) : (
-                          notifList.map((n) => (
-                            <div
-                              key={n.id}
-                              className={`px-4 py-3 text-right text-sm transition-colors ${n.read ? "bg-white hover:bg-gray-50" : "bg-indigo-50/60 hover:bg-indigo-50"}`}
-                            >
-                              <p className="text-gray-800 leading-relaxed break-words whitespace-normal">{n.message}</p>
-                              <p className="text-gray-400 text-xs mt-1.5">
-                                {new Date(n.createdAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" })}
-                              </p>
-                            </div>
-                          ))
+                          notifList.map((n) => {
+                            const link = getNotificationLink(n);
+                            return (
+                              <div
+                                key={n.id}
+                                onClick={() => handleNotificationClick(n)}
+                                className={`px-4 py-3 text-right text-sm transition-colors ${link ? "cursor-pointer" : ""} ${n.read ? "bg-white hover:bg-gray-50" : "bg-indigo-50/60 hover:bg-indigo-50"}`}
+                              >
+                                <p className="text-gray-800 leading-relaxed break-words whitespace-normal">{n.message}</p>
+                                <p className="text-gray-400 text-xs mt-1.5">
+                                  {n.createdAt && !Number.isNaN(new Date(n.createdAt).getTime())
+                                    ? new Date(n.createdAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" })
+                                    : ""}
+                                </p>
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -336,6 +369,27 @@ import { apiFetch } from "@/lib/api-fetch";
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-800 truncate">{u.name ?? u.username}</div>
                               {u.username && <div className="text-xs text-gray-400">@{u.username}</div>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!searchLoading && searchResults && (searchResults.repositories?.length ?? 0) > 0 && (
+                      <div className={(searchResults.courses?.length || searchResults.users?.length) ? "border-t border-gray-50" : ""}>
+                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-50">المستودعات العامة</div>
+                        {searchResults.repositories.map((r) => (
+                          <button
+                            key={r.id}
+                            onClick={() => { if (r.owner?.id) navigate(`/users/${r.owner.id}`); setSearchOpen(false); setSearchQuery(""); }}
+                            className="w-full text-right px-4 py-2.5 hover:bg-indigo-50 flex items-center gap-3"
+                            data-testid={`search-repo-${r.id}`}
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-cyan-100 flex items-center justify-center shrink-0">
+                              <FolderGit2 size={13} className="text-cyan-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800 truncate">{r.title}</div>
+                              {r.owner?.name && <div className="text-xs text-gray-400">{r.owner.name}</div>}
                             </div>
                           </button>
                         ))}

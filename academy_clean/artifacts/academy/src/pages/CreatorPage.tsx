@@ -137,6 +137,12 @@ export default function CreatorPage() {
   const [lessonsLoading, setLessonsLoading] = useState<Record<number, boolean>>({});
   const [expandLessonManage, setExpandLessonManage] = useState<number | null>(null);
   const [deletingLesson, setDeletingLesson] = useState<Record<number, boolean>>({});
+  const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
+  const [editCourseForm, setEditCourseForm] = useState({
+    title: "", description: "", category: "", level: "beginner",
+  });
+  const [editCourseSaving, setEditCourseSaving] = useState(false);
+  const [editCourseError, setEditCourseError] = useState("");
   const videoRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const pdfRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const attachRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -144,7 +150,7 @@ export default function CreatorPage() {
   const appendPdfRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const appendAttachRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const { data: coursesData, refetch } = useListCourses();
+  const { data: coursesData, refetch } = useListCourses({ limit: 100 });
   const createChallenge = useCreateChallenge();
   const allCourses = coursesData?.courses ?? [];
 
@@ -338,25 +344,17 @@ export default function CreatorPage() {
     setError("");
     setSuccess("");
     try {
-      const meRes = await apiFetch(`${BASE}/api/auth/me`, );
-      const meData = meRes.ok ? await meRes.json() : null;
-      const clerkId = meData?.user?.id;
-      if (!clerkId) throw new Error("تعذر التعرف على المستخدم");
-
-      const usersRes = await apiFetch(`${BASE}/api/users?limit=200`, );
-      const usersData = usersRes.ok ? await usersRes.json() : null;
-      const localUser = (usersData?.users ?? []).find((u: any) => u.clerkId === clerkId);
-      if (!localUser) throw new Error("لم يتم العثور على ملفك الشخصي");
+      if (!user?.id) throw new Error("لم يتم العثور على ملفك الشخصي");
 
       const courseRes = await apiFetch(`${BASE}/api/courses`, {
         method: "POST",
-      
+
         body: JSON.stringify({
           title: courseForm.title,
           description: courseForm.description || courseForm.title,
           category: courseForm.category,
           level: courseForm.level,
-          creatorId: localUser.id,
+          creatorId: user.id,
         }),
       });
       if (!courseRes.ok) throw new Error("فشل إنشاء الكورس");
@@ -469,8 +467,7 @@ export default function CreatorPage() {
   };
 
   const myCourses = allCourses.filter((c: any) => {
-    // creatorClerkId is now returned by the backend; compare against the session's clerkId
-    const isOwner = c.creatorClerkId === user?.id;
+    const isOwner = c.creatorId === user?.id;
     return !removedCourseIds.includes(c.id) && (isAdmin || isOwner);
   });
 
@@ -519,6 +516,44 @@ export default function CreatorPage() {
       setDeleteError(err?.message ?? "حدث خطأ أثناء حذف الدرس");
     } finally {
       setDeletingLesson((prev) => ({ ...prev, [lessonId]: false }));
+    }
+  };
+
+  const startEditCourse = (course: { id: number; title: string; description?: string; category: string; level: string }) => {
+    setEditingCourseId(course.id);
+    setEditCourseForm({
+      title: course.title,
+      description: course.description ?? "",
+      category: course.category,
+      level: course.level,
+    });
+    setEditCourseError("");
+  };
+
+  const handleUpdateCourse = async (courseId: number) => {
+    if (!editCourseForm.title || !editCourseForm.category) {
+      setEditCourseError("العنوان والتصنيف مطلوبان");
+      return;
+    }
+    setEditCourseSaving(true);
+    setEditCourseError("");
+    try {
+      const res = await apiFetch(`${BASE}/api/courses/${courseId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: editCourseForm.title,
+          description: editCourseForm.description,
+          category: editCourseForm.category,
+          level: editCourseForm.level,
+        }),
+      });
+      if (!res.ok) throw new Error("فشل تحديث الكورس");
+      setEditingCourseId(null);
+      await refetch();
+    } catch (err: any) {
+      setEditCourseError(err?.message ?? "فشل تحديث الكورس");
+    } finally {
+      setEditCourseSaving(false);
     }
   };
 
@@ -793,17 +828,56 @@ export default function CreatorPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {myCourses.map((course: any) => (
               <div key={course.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-800 truncate">{course.title}</h3>
-                    <p className="text-gray-500 text-xs mt-1">{course.category} · {LEVEL_LABELS[course.level] ?? course.level}</p>
+                {editingCourseId === course.id ? (
+                  <div className="space-y-3">
+                    <input value={editCourseForm.title} onChange={(e) => setEditCourseForm((p) => ({ ...p, title: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right" placeholder="عنوان الكورس" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input value={editCourseForm.category} onChange={(e) => setEditCourseForm((p) => ({ ...p, category: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right" placeholder="التصنيف" />
+                      <select value={editCourseForm.level} onChange={(e) => setEditCourseForm((p) => ({ ...p, level: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right bg-white">
+                        <option value="beginner">مبتدئ</option>
+                        <option value="intermediate">متوسط</option>
+                        <option value="advanced">متقدم</option>
+                      </select>
+                    </div>
+                    <textarea value={editCourseForm.description} onChange={(e) => setEditCourseForm((p) => ({ ...p, description: e.target.value }))}
+                      rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-right resize-none" placeholder="وصف الكورس" />
+                    {editCourseError && <div className="text-xs text-red-600">{editCourseError}</div>}
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleUpdateCourse(course.id)} disabled={editCourseSaving}
+                        className="flex-1 rounded-full px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                        {editCourseSaving ? "جاري الحفظ..." : "حفظ التعديلات"}
+                      </button>
+                      <button onClick={() => setEditingCourseId(null)} disabled={editCourseSaving}
+                        className="flex-1 rounded-full px-4 py-2 text-sm font-bold border border-gray-200 text-gray-600 hover:bg-gray-50">
+                        إلغاء
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full px-2.5 py-1 shrink-0">
-                    {course.totalLessons} درس
-                  </span>
-                </div>
-                {course.description && (
-                  <p className="text-gray-500 text-sm mt-2 line-clamp-2">{course.description}</p>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-800 truncate">{course.title}</h3>
+                        <p className="text-gray-500 text-xs mt-1">{course.category} · {LEVEL_LABELS[course.level] ?? course.level}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full px-2.5 py-1">
+                          {course.totalLessons} درس
+                        </span>
+                        <button onClick={() => startEditCourse(course)}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-full px-2.5 py-1">
+                          تعديل
+                        </button>
+                      </div>
+                    </div>
+                    {course.description && (
+                      <p className="text-gray-500 text-sm mt-2 line-clamp-2">{course.description}</p>
+                    )}
+                  </>
                 )}
                 <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
                   <Link href={`/courses/${course.id}`}

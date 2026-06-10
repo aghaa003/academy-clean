@@ -5,6 +5,7 @@ import Navbar from "@/components/layout/Navbar";
 import {
   useListUsers,
   useListCourses,
+  useListChallenges,
   useCreateCourse,
   useUpdateUser,
 } from "@workspace/api-client-react";
@@ -190,6 +191,17 @@ export default function AdminPage() {
   const [challengeError, setChallengeError] = useState("");
   const [challengeSuccess, setChallengeSuccess] = useState("");
 
+  const [editingChallengeId, setEditingChallengeId] = useState<number | null>(null);
+  const [editChallengeForm, setEditChallengeForm] = useState({
+    title: "",
+    description: "",
+    difficulty: "easy",
+    category: "",
+    points: "10",
+  });
+  const [editChallengeSaving, setEditChallengeSaving] = useState(false);
+  const [editChallengeError, setEditChallengeError] = useState("");
+
   const [logs, setLogs] = useState<LoginLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsLoaded, setLogsLoaded] = useState(false);
@@ -203,6 +215,7 @@ export default function AdminPage() {
 
   const { data: usersData, refetch: refetchUsers } = useListUsers();
   const { data: coursesData, refetch: refetchCourses } = useListCourses();
+  const { data: challengesData, refetch: refetchChallenges } = useListChallenges({ limit: 100 });
 
   const createCourse = useCreateCourse();
   const createChallenge = useCreateChallenge();
@@ -210,6 +223,7 @@ export default function AdminPage() {
 
   const users = usersData?.users ?? [];
   const courses = coursesData?.courses ?? [];
+  const challenges = challengesData?.challenges ?? [];
   const creators = users.filter((u) => u.role === "creator" || u.role === "admin");
   const totalLessons = courses.reduce((sum, course: any) => sum + (course.totalLessons ?? 0), 0);
 
@@ -254,10 +268,64 @@ export default function AdminPage() {
         points: "10",
       });
       setChallengeSuccess("تمت إضافة التحدي بنجاح");
+      refetchChallenges();
     } catch (err: any) {
       setChallengeError(err?.message ?? "فشل إنشاء التحدي");
     } finally {
       setChallengeSaving(false);
+    }
+  };
+
+  const startEditChallenge = (c: { id: number; title: string; description: string; difficulty: string; category: string; points: number }) => {
+    setEditingChallengeId(c.id);
+    setEditChallengeForm({
+      title: c.title,
+      description: c.description,
+      difficulty: c.difficulty,
+      category: c.category,
+      points: String(c.points),
+    });
+    setEditChallengeError("");
+  };
+
+  const handleUpdateChallenge = async () => {
+    if (editingChallengeId === null) return;
+    if (!editChallengeForm.title || !editChallengeForm.description) {
+      setEditChallengeError("العنوان والوصف مطلوبان");
+      return;
+    }
+    setEditChallengeSaving(true);
+    setEditChallengeError("");
+    try {
+      const res = await apiFetch(`/api/challenges/${editingChallengeId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: editChallengeForm.title,
+          description: editChallengeForm.description,
+          difficulty: editChallengeForm.difficulty,
+          category: editChallengeForm.category,
+          points: Number(editChallengeForm.points) || 0,
+        }),
+      });
+      if (!res.ok) throw new Error("فشل تحديث التحدي");
+      setEditingChallengeId(null);
+      refetchChallenges();
+    } catch (err: any) {
+      setEditChallengeError(err?.message ?? "فشل تحديث التحدي");
+    } finally {
+      setEditChallengeSaving(false);
+    }
+  };
+
+  const handleDeleteChallenge = async (challengeId: number) => {
+    if (!window.confirm("هل تريد حذف هذا التحدي نهائياً؟")) return;
+    try {
+      const res = await apiFetch(`/api/challenges/${challengeId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("فشل حذف التحدي");
+      if (editingChallengeId === challengeId) setEditingChallengeId(null);
+      refetchChallenges();
+    } catch {
+      setChallengeError("حدث خطأ أثناء حذف التحدي");
     }
   };
 
@@ -629,10 +697,10 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
         {/* Stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
-            { icon: <Users size={24} className="text-indigo-500" />, value: usersData?.total ?? 0, label: "مستخدم" },
-            { icon: <BookOpen size={24} className="text-teal-500" />, value: coursesData?.courses?.length ?? 0, label: "كورس" },
+            { icon: <Users size={24} className="text-indigo-500" />, value: usersData?.total ?? users.length, label: "مستخدم" },
+            { icon: <BookOpen size={24} className="text-teal-500" />, value: coursesData?.total ?? courses.length, label: "كورس" },
             { icon: <Video size={24} className="text-purple-500" />, value: totalLessons, label: "درس" },
-            { icon: <Trophy size={24} className="text-amber-500" />, value: "6", label: "تحدي نشط" },
+            { icon: <Trophy size={24} className="text-amber-500" />, value: challengesData?.total ?? challenges.length, label: "تحدي نشط" },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col items-center text-center">
               {s.icon}
@@ -693,6 +761,58 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
               </div>
             </div>
           )}
+
+          {/* Existing challenges list — edit/delete (CRUD) */}
+          <div className="mt-6 border-t border-gray-100 pt-4 space-y-3">
+            {challenges.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-4">لا توجد تحديات بعد</p>
+            ) : (
+              challenges.map((c) => (
+                <div key={c.id} className="rounded-2xl border border-gray-100 p-4">
+                  {editingChallengeId === c.id ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input value={editChallengeForm.title} onChange={(e) => setEditChallengeForm((p) => ({ ...p, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="عنوان التحدي" />
+                      <input value={editChallengeForm.category} onChange={(e) => setEditChallengeForm((p) => ({ ...p, category: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="التصنيف" />
+                      <select value={editChallengeForm.difficulty} onChange={(e) => setEditChallengeForm((p) => ({ ...p, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
+                        <option value="easy">سهل</option>
+                        <option value="medium">متوسط</option>
+                        <option value="hard">صعب</option>
+                      </select>
+                      <input value={editChallengeForm.points} onChange={(e) => setEditChallengeForm((p) => ({ ...p, points: e.target.value }))} type="number" min="0" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="النقاط" />
+                      <textarea value={editChallengeForm.description} onChange={(e) => setEditChallengeForm((p) => ({ ...p, description: e.target.value }))} rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="وصف التحدي" />
+                      {editChallengeError && <div className="md:col-span-2 text-sm text-red-600">{editChallengeError}</div>}
+                      <div className="md:col-span-2 flex justify-end gap-2">
+                        <button onClick={() => setEditingChallengeId(null)} className="rounded-full px-5 py-2 text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">
+                          إلغاء
+                        </button>
+                        <button onClick={handleUpdateChallenge} disabled={editChallengeSaving} className="rounded-full px-6 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#0f766e,#14b8a6)" }}>
+                          {editChallengeSaving ? "جاري الحفظ..." : "حفظ التعديلات"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => startEditChallenge(c)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
+                          <Pencil size={12} /> تعديل
+                        </button>
+                        <button onClick={() => handleDeleteChallenge(c.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
+                          <Trash2 size={12} /> حذف
+                        </button>
+                      </div>
+                      <div className="text-right flex-1 min-w-0">
+                        <div className="font-semibold text-gray-900 text-sm">{c.title}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {c.category} ·{" "}
+                          {c.difficulty === "easy" ? "سهل" : c.difficulty === "medium" ? "متوسط" : "صعب"} · {c.points} نقطة
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Overview */}
@@ -1030,6 +1150,9 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                                   {lesson.success}
                                 </div>
                               )}
+                              {lesson.videoUrl && (
+                                <video src={lesson.videoUrl} controls className="w-full rounded-2xl border border-gray-200 max-h-64 bg-black" />
+                              )}
                               <div className="flex items-center justify-between pt-2">
                                 <div className="text-xs text-red-600">{appendError[c.id] ?? ""}</div>
                                 <button onClick={() => handleAppendCourse(c.id)} disabled={(appendLessons[c.id] ?? []).length === 0 || !!appendSaving[c.id]} className="rounded-full px-6 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#8b5cf6,#c084fc)" }}>
@@ -1366,6 +1489,9 @@ function LessonCard({ lesson, index, onUpdate, onRemove, onVideoSelect, onPdfSel
       )}
       {lesson.error && (
         <p className="text-xs text-red-600 text-right">{lesson.error}</p>
+      )}
+      {lesson.videoUrl && (
+        <video src={lesson.videoUrl} controls className="w-full rounded-2xl border border-gray-200 max-h-64 bg-black" />
       )}
     </div>
   );

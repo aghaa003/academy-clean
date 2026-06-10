@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { CheckCircle, Clock, Trash2, ChevronRight, Loader2, XCircle, Star, Upload, X, Lock, Eye } from "lucide-react";
+import { CheckCircle, Clock, Trash2, ChevronRight, Loader2, XCircle, Star, Upload, X, Lock, Eye, Plus } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
@@ -237,27 +237,6 @@ const ASSIGNMENTS: Assignment[] = [
   { id: 72, lang: "Flask", title: "رفع الملفات", problem: "أنشئ نقطة نهاية Flask لرفع الصور مع: التحقق من النوع والحجم، تخزين آمن، وعرضها.", example: "request.files، secure_filename()، ALLOWED_EXTENSIONS، send_from_directory()" },
 ];
 
-const PROJECTS: Project[] = [
-  { id: 1, track: "basics", title: "آلة حاسبة متقدمة", desc: "بناء آلة حاسبة تدعم العمليات الأساسية والمتقدمة مع واجهة رسومية.", difficulty: 2, tags: ["C++", "UI", "OOP"], category: "آلة حاسبة" },
-  { id: 2, track: "basics", title: "نظام إدارة المكتبة", desc: "تطوير نظام لإدارة الكتب والأعضاء والإعارات باستخدام قاعدة بيانات.", difficulty: 3, tags: ["C#", "SQL", "OOP"], category: "إدارة بيانات" },
-  { id: 3, track: "basics", title: "برنامج إدارة الطلاب", desc: "نظام لتسجيل الطلاب وحساب معدلاتهم وعرض التقارير.", difficulty: 2, tags: ["C", "ملفات", "هياكل بيانات"], category: "إدارة سجلات" },
-  { id: 4, track: "basics", title: "لعبة الأفعى Snake", desc: "تطوير لعبة الأفعى الكلاسيكية باستخدام مفاهيم البرمجة الإجرائية.", difficulty: 3, tags: ["C++", "رسومات", "منطق اللعبة"], category: "تطوير ألعاب" },
-  { id: 5, track: "basics", title: "محرك SQL مصغر", desc: "بناء محرك SQL بسيط يدعم CREATE TABLE وINSERT وSELECT يدوياً.", difficulty: 4, tags: ["C", "SQL", "معالجة نصوص"], category: "محركات قواعد البيانات" },
-  { id: 6, track: "basics", title: "مترجم CS50 تسلسلي", desc: "تنفيذ تحديات CS50 كاملة من Week 0 إلى Week 5 في مشروع متسلسل.", difficulty: 3, tags: ["CS50", "C", "خوارزميات"], category: "تحديات CS50" },
-  { id: 7, track: "frontend", title: "متجر إلكتروني React", desc: "بناء متجر إلكتروني كامل مع سلة تسوق وصفحات المنتجات باستخدام React.", difficulty: 3, tags: ["React", "TypeScript", "CSS"], category: "تطوير ويب" },
-  { id: 8, track: "frontend", title: "لوحة تحكم إدارية", desc: "تصميم داشبورد تفاعلي مع رسوم بيانية وإحصاءات في الوقت الحقيقي.", difficulty: 3, tags: ["Vue.js", "Charts", "Dashboard"], category: "لوحة تحكم" },
-  { id: 9, track: "frontend", title: "تطبيق الطقس", desc: "تطبيق يعرض بيانات الطقس من API بتصميم جذاب مع رسوم متحركة.", difficulty: 2, tags: ["React", "API", "Tailwind CSS"], category: "تطبيق ويب" },
-  { id: 10, track: "frontend", title: "منصة مدونة", desc: "إنشاء منصة تدوين كاملة مع مقالات ونظام تعليقات وتصنيفات.", difficulty: 4, tags: ["Next.js", "Markdown", "SEO"], category: "نظام نشر" },
-  { id: 11, track: "frontend", title: "مشغل موسيقى", desc: "بناء مشغل موسيقى بواجهة جميلة يدعم قوائم التشغيل والتحكم.", difficulty: 3, tags: ["React", "Web Audio API", "CSS"], category: "وسائط" },
-  { id: 12, track: "frontend", title: "مولد مخططات ذهنية", desc: "أداة رسم تفاعلية لإنشاء مخططات ذهنية قابلة للتصدير.", difficulty: 4, tags: ["Angular", "Canvas", "SVG"], category: "إنتاجية" },
-  { id: 13, track: "backend", title: "API تجارة إلكترونية", desc: "بناء RESTful API شامل لمتجر إلكتروني مع المصادقة وإدارة المنتجات.", difficulty: 4, tags: ["Node.js", "Express.js", "MongoDB"], category: "تطوير خادم" },
-  { id: 14, track: "backend", title: "نظام مصادقة كامل", desc: "تطوير نظام تسجيل دخول شامل مع JWT وتشفير وإعادة تعيين كلمة المرور.", difficulty: 4, tags: ["Python", "Django", "PostgreSQL"], category: "أمان" },
-  { id: 15, track: "backend", title: "نظام دردشة Real-Time", desc: "خادم دردشة باستخدام WebSockets يدعم غرفاً متعددة ورسائل فورية.", difficulty: 4, tags: ["Node.js", "Express.js", "MongoDB"], category: "الوقت الحقيقي" },
-  { id: 16, track: "backend", title: "خدمة مصغرة Microservice", desc: "بناء خدمة مصغرة مستقلة مع API Gateway.", difficulty: 5, tags: ["Node.js", "Laravel", "Flask"], category: "معمارية" },
-  { id: 17, track: "backend", title: "محرك بحث مخصص", desc: "تطوير محرك بحث نصي كامل مع فهرسة وترتيب نتائج.", difficulty: 5, tags: ["Python", "Django", "MongoDB"], category: "بحث ونصوص" },
-  { id: 18, track: "backend", title: "نظام إدارة ملفات API", desc: "بناء API لرفع وتنزيل وتنظيم الملفات مع Express وMulter.", difficulty: 3, tags: ["Express.js", "PHP", "Next.js"], category: "تخزين ملفات" },
-];
-
 const TRACK_LABELS: Record<ProjectTrack, string> = {
   basics: "أساسيات البرمجة",
   frontend: "مسار Frontend",
@@ -306,7 +285,86 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   const uploadFileRef = useRef<HTMLInputElement | null>(null);
   const uploadCoverImageRef = useRef<HTMLInputElement | null>(null);
 
+  // Dynamic projects (fetched from backend)
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const canManage = user?.role === "admin" || user?.role === "employer";
+
+  // Add project form state (admin/employer only)
+  const [showAddProjectForm, setShowAddProjectForm] = useState(false);
+  const [newProjectTrack, setNewProjectTrack] = useState<ProjectTrack>("basics");
+  const [newProjectTitle, setNewProjectTitle] = useState("");
+  const [newProjectDesc, setNewProjectDesc] = useState("");
+  const [newProjectDifficulty, setNewProjectDifficulty] = useState(2);
+  const [newProjectTags, setNewProjectTags] = useState("");
+  const [newProjectCategory, setNewProjectCategory] = useState("");
+  const [savingProject, setSavingProject] = useState(false);
+
+  const fetchProjects = useCallback(() => {
+    setProjectsLoading(true);
+    apiFetch("/api/projects")
+      .then((r) => (r.ok ? r.json() : { projects: [] }))
+      .then((data) => {
+        const list = Array.isArray(data?.projects) ? data.projects : [];
+        setProjects(
+          list.map((p: { id: number; track: ProjectTrack; title: string; description: string | null; difficulty: number; tags: string[] | null; category: string | null }) => ({
+            id: p.id,
+            track: p.track,
+            title: p.title,
+            desc: p.description ?? "",
+            difficulty: p.difficulty,
+            tags: p.tags ?? [],
+            category: p.category ?? "",
+          }))
+        );
+      })
+      .catch(() => setProjects([]))
+      .finally(() => setProjectsLoading(false));
+  }, []);
+
   useEffect(() => { setStartedProjects(loadStarted()); }, []);
+  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+
+  const handleAddProject = async () => {
+    if (!newProjectTitle.trim() || savingProject) return;
+    setSavingProject(true);
+    try {
+      const res = await apiFetch("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          track: newProjectTrack,
+          title: newProjectTitle.trim(),
+          desc: newProjectDesc.trim() || null,
+          difficulty: newProjectDifficulty,
+          tags: newProjectTags.split(",").map((t) => t.trim()).filter(Boolean),
+          category: newProjectCategory.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        setNewProjectTitle("");
+        setNewProjectDesc("");
+        setNewProjectDifficulty(2);
+        setNewProjectTags("");
+        setNewProjectCategory("");
+        setShowAddProjectForm(false);
+        fetchProjects();
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const handleDeleteProject = async (id: number) => {
+    if (!confirm("هل أنت متأكد من حذف هذا المشروع؟")) return;
+    try {
+      const res = await apiFetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (res.ok) setProjects((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      /* silent */
+    }
+  };
 
   const activeLang: AssignmentLang =
     activeCategory === "basics"
@@ -317,7 +375,7 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
 
   const categoryAssignments = ASSIGNMENTS.filter((a) => a.lang === activeLang);
   const currentAssignment = categoryAssignments[currentAssignmentIdx] ?? categoryAssignments[0];
-  const filteredProjects = PROJECTS.filter((p) => p.track === activeTrack);
+  const filteredProjects = projects.filter((p) => p.track === activeTrack);
 
   const handleNextAssignment = () => {
     setCurrentAssignmentIdx((prev) => (prev + 1) % categoryAssignments.length);
@@ -498,7 +556,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
   };
 
   const handleUploadSolution = async () => {
-    const project = PROJECTS.find((p) => p.id === uploadProjectId);
+    const project = projects.find((p) => p.id === uploadProjectId);
     if (!project || !user?.id) return;
     if (!uploadSolutionText.trim() && !uploadFile) {
       alert("الرجاء كتابة وصف الحل أو رفع ملف.");
@@ -830,7 +888,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {startedProjects.map((sp) => {
-                const project = PROJECTS.find((p) => p.id === sp.projectId);
+                const project = projects.find((p) => p.id === sp.projectId);
                 if (!project) return null;
                 return (
                   <div
@@ -883,7 +941,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
           <div className="absolute bottom-0 right-0 left-0 h-0.5 rounded-full" style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }} />
         </h2>
         <div className="text-center mb-8 mt-4">
-          <div className="inline-flex gap-2 flex-wrap justify-center">
+          <div className="inline-flex gap-2 flex-wrap justify-center items-center">
             {(["basics", "frontend", "backend"] as ProjectTrack[]).map((track) => (
               <button
                 key={track}
@@ -894,9 +952,92 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                 {TRACK_LABELS[track]}
               </button>
             ))}
+            {canManage && (
+              <button
+                onClick={() => { setShowAddProjectForm((v) => !v); setNewProjectTrack(activeTrack); }}
+                className="flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white shadow transition-all hover:shadow-md"
+                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
+                data-testid="button-add-project"
+              >
+                {showAddProjectForm ? <X size={16} /> : <Plus size={16} />}
+                {showAddProjectForm ? "إلغاء" : "إضافة مشروع"}
+              </button>
+            )}
           </div>
         </div>
 
+        {canManage && showAddProjectForm && (
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mb-8 max-w-3xl mx-auto">
+            <h3 className="font-bold text-gray-900 mb-4 text-right">إضافة مشروع جديد</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <input
+                value={newProjectTitle}
+                onChange={(e) => setNewProjectTitle(e.target.value)}
+                placeholder="عنوان المشروع"
+                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <select
+                value={newProjectTrack}
+                onChange={(e) => setNewProjectTrack(e.target.value as ProjectTrack)}
+                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                {(["basics", "frontend", "backend"] as ProjectTrack[]).map((track) => (
+                  <option key={track} value={track}>{TRACK_LABELS[track]}</option>
+                ))}
+              </select>
+            </div>
+            <textarea
+              value={newProjectDesc}
+              onChange={(e) => setNewProjectDesc(e.target.value)}
+              placeholder="وصف المشروع"
+              rows={2}
+              className="w-full border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4 resize-none"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <input
+                value={newProjectCategory}
+                onChange={(e) => setNewProjectCategory(e.target.value)}
+                placeholder="التصنيف (مثل: تطوير ويب)"
+                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <input
+                value={newProjectTags}
+                onChange={(e) => setNewProjectTags(e.target.value)}
+                placeholder="التقنيات (مفصولة بفواصل)"
+                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <select
+                value={newProjectDifficulty}
+                onChange={(e) => setNewProjectDifficulty(Number(e.target.value))}
+                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                {[1, 2, 3, 4, 5].map((d) => (
+                  <option key={d} value={d}>الصعوبة: {d}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handleAddProject}
+              disabled={!newProjectTitle.trim() || savingProject}
+              className="rounded-xl px-6 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
+            >
+              {savingProject ? "جاري الحفظ..." : "حفظ المشروع"}
+            </button>
+          </div>
+        )}
+
+        {projectsLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-gray-100 rounded-2xl h-64 animate-pulse" />
+            ))}
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <p className="text-lg font-medium">لا توجد مشاريع في هذا المسار حالياً</p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProjects.map((project) => {
             const started = getProjectStarted(project.id);
@@ -906,7 +1047,19 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                 className={`bg-white rounded-2xl shadow-sm border p-6 flex flex-col ${started ? "border-indigo-200" : "border-gray-100"}`}
                 data-testid={`card-project-${project.id}`}
               >
-                <div className="text-xs text-indigo-500 font-semibold mb-2 text-right">{project.category} 🏷</div>
+                <div className="flex items-center justify-between mb-2">
+                  {canManage && (
+                    <button
+                      onClick={() => handleDeleteProject(project.id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                      data-testid={`button-delete-project-${project.id}`}
+                      title="حذف المشروع"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                  <div className="text-xs text-indigo-500 font-semibold text-right flex-1">{project.category} 🏷</div>
+                </div>
                 <h3 className="font-bold text-gray-900 text-lg mb-2 text-right">{project.title}</h3>
                 <p className="text-gray-500 text-sm mb-4 text-right leading-relaxed flex-1">{project.desc}</p>
                 <div className="flex items-center gap-1.5 mb-4 flex-row-reverse">
@@ -960,6 +1113,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
             );
           })}
         </div>
+        )}
       </section>
 
       <Footer />
@@ -977,7 +1131,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
               </button>
               <div className="text-right">
                 <h2 className="text-white font-bold text-base">رفع حل المشروع</h2>
-                <p className="text-indigo-200 text-xs mt-0.5">{PROJECTS.find((p) => p.id === uploadProjectId)?.title}</p>
+                <p className="text-indigo-200 text-xs mt-0.5">{projects.find((p) => p.id === uploadProjectId)?.title}</p>
               </div>
             </div>
 

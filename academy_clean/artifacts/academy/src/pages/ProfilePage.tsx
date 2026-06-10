@@ -2,10 +2,11 @@ import { useEffect, useCallback, useMemo, useRef, useState, type ChangeEvent } f
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
 import Footer from "@/components/layout/Footer";
-import { useGetUserStats, useGetLeaderboard, useListCourses, useListRepositories } from "@workspace/api-client-react";
+import { useGetUserStats, useGetLeaderboard, useListCourses } from "@workspace/api-client-react";
 import {
   Camera, ChevronDown, Trophy, BookOpen, Code2,
   Star, BarChart2, Shield, User, FolderGit2, Plus, ExternalLink, Loader2, Globe, Trash2,
+  Pencil, Download, Save, X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -34,6 +35,7 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [country, setCountry] = useState("");
   const [bio, setBio] = useState("");
+  const [skills, setSkills] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(user?.imageUrl ?? "");
   const [activityLogs, setActivityLogs] = useState([
     "أكملت درساً في كورس الواجهة الأمامية",
@@ -57,6 +59,14 @@ export default function ProfilePage() {
   const [newRepoIsPublic, setNewRepoIsPublic] = useState(true);
   const [avatarStamp, setAvatarStamp] = useState(0);
   const [deletingRepoId, setDeletingRepoId] = useState<number | null>(null);
+  const [editingRepoId, setEditingRepoId] = useState<number | null>(null);
+  const [editRepoTitle, setEditRepoTitle] = useState("");
+  const [editRepoDesc, setEditRepoDesc] = useState("");
+  const [editRepoTechs, setEditRepoTechs] = useState("");
+  const [editRepoUrl, setEditRepoUrl] = useState("");
+  const [editRepoLive, setEditRepoLive] = useState("");
+  const [editRepoIsPublic, setEditRepoIsPublic] = useState(true);
+  const [savingRepoEdit, setSavingRepoEdit] = useState(false);
   const [newRepoCoverImage, setNewRepoCoverImage] = useState<File | null>(null);
   const [newRepoCoverImagePreview, setNewRepoCoverImagePreview] = useState<string>("");
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -64,23 +74,6 @@ export default function ProfilePage() {
   const displayName = `${firstName} ${lastName}`.trim() || user?.fullName || "المستخدم";
   const avatarSource = avatarUrl || user?.imageUrl || "";
 const [activities, setActivities] = useState<any[]>([]);
-// Define what the data should look like
-interface ProfileData {
-  repositories: {
-    id: number;
-    title: string;
-      description: string;
-      technologies: string[];
-      repoUrl: string;
-      liveDemoUrl: string;
-      codeFilesUrls: string[];
-      pdfFilesUrls: string[];
-      coverImageUrl: string;
-      sourceProject: string;
-      likes: number;
-
-  }[];
-}
 // Add in useEffect
 useEffect(() => {
   Promise.all([
@@ -100,9 +93,9 @@ useEffect(() => {
         date: s.created_at,
       });
     });
-const { data } = useListRepositories<ProfileData>();
+
     // Add repos as activities
-    const repos = data?.repositories ?? [];
+    const repos = ((reposData as any)?.repositories ?? []) as any[];
     repos.slice(0, 2).forEach((r: any) => {
       acts.push({
         type: "repo",
@@ -158,7 +151,11 @@ const { data } = useListRepositories<ProfileData>();
     if (!user) return;
     setFirstName(user.firstName ?? "");
     setLastName(user.lastName ?? "");
-  }, [user?.id, user?.firstName, user?.lastName]);
+    setPhone(user.phone ?? "");
+    setCountry(user.country ?? "");
+    setBio(user.bio ?? "");
+    setSkills((user.skills ?? []).join(", "));
+  }, [user?.id, user?.firstName, user?.lastName, user?.phone, user?.country, user?.bio, user?.skills]);
 
   useEffect(() => {
     const syncName = (event: Event) => {
@@ -178,7 +175,10 @@ const { data } = useListRepositories<ProfileData>();
      const res = await apiFetch("/api/users/profile"
 , {
         method: "POST",
-        body: JSON.stringify({ firstName, lastName, phone, country, bio, avatarUrl }),
+        body: JSON.stringify({
+          firstName, lastName, phone, country, bio, avatarUrl,
+          skills: skills.split(",").map((s) => s.trim()).filter(Boolean),
+        }),
       });
       if (!res.ok) throw new Error("save failed");
       const data = await res.json() as { user?: { firstName?: string | null; lastName?: string | null; imageUrl?: string } };
@@ -271,6 +271,53 @@ const res = await apiFetch("/api/upload", { method: "POST", body: form });
       alert("حدث خطأ أثناء الحذف");
     } finally {
       setDeletingRepoId(null);
+    }
+  };
+
+  const handleToggleRepoLike = async (repoId: number) => {
+    try {
+      const res = await apiFetch(`/api/repositories/${repoId}/like`, { method: "POST" });
+      if (!res.ok) return;
+      const data = await res.json() as { liked: boolean; likesCount: number };
+      setRepos((prev) => prev.map((r) => (r.id === repoId ? { ...r, likes: data.likesCount, liked: data.liked } : r)));
+    } catch { /* silent */ }
+  };
+
+  const handleStartEditRepo = (repo: any) => {
+    setEditingRepoId(repo.id);
+    setEditRepoTitle(repo.title ?? "");
+    setEditRepoDesc(repo.description ?? "");
+    setEditRepoTechs((repo.technologies ?? []).join(", "));
+    setEditRepoUrl(repo.repoUrl ?? "");
+    setEditRepoLive(repo.liveDemoUrl ?? "");
+    setEditRepoIsPublic(!!repo.isPublic);
+  };
+
+  const handleCancelEditRepo = () => setEditingRepoId(null);
+
+  const handleSaveRepoEdit = async (repoId: number) => {
+    setSavingRepoEdit(true);
+    try {
+      const res = await apiFetch(`/api/repositories/${repoId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: editRepoTitle.trim(),
+          description: editRepoDesc.trim(),
+          technologies: editRepoTechs.split(",").map((t) => t.trim()).filter(Boolean),
+          repoUrl: editRepoUrl.trim() || null,
+          liveDemoUrl: editRepoLive.trim() || null,
+          isPublic: editRepoIsPublic,
+        }),
+      });
+      if (!res.ok) throw new Error("update failed");
+      const updated = await res.json();
+      setRepos((prev) => prev.map((r) => (r.id === repoId ? { ...r, ...updated } : r)));
+      setEditingRepoId(null);
+      setActivityLogs((prev) => ["تم تحديث بيانات المشروع", ...prev].slice(0, 5));
+    } catch {
+      alert("فشل تحديث المشروع، يرجى المحاولة مجدداً");
+    } finally {
+      setSavingRepoEdit(false);
     }
   };
 
@@ -734,6 +781,26 @@ const repoRes = await apiFetch("/api/repositories", {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5 text-right">المهارات</label>
+                    <input
+                      value={skills}
+                      onChange={(e) => setSkills(e.target.value)}
+                      placeholder="المهارات (مفصولة بفاصلة): React, PHP, Laravel, ..."
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      data-testid="input-skills"
+                    />
+                    {skills.trim() && (
+                      <div className="flex flex-wrap gap-1.5 justify-end mt-2">
+                        {skills.split(",").map((s) => s.trim()).filter(Boolean).map((s) => (
+                          <span key={s} className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-full px-2.5 py-0.5 font-medium">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end">
                     <button
                       onClick={handleSave}
@@ -1008,6 +1075,15 @@ const repoRes = await apiFetch("/api/repositories", {
                                 : <Trash2 size={15} />
                               }
                             </button>
+                            {/* Edit button */}
+                            <button
+                              onClick={() => handleStartEditRepo(repo)}
+                              className="text-gray-300 hover:text-indigo-500 transition-colors"
+                              title="تعديل المشروع"
+                              data-testid={`button-edit-repo-${repo.id}`}
+                            >
+                              <Pencil size={14} />
+                            </button>
                             {repo.repoUrl && (
                               <a href={repo.repoUrl} target="_blank" rel="noreferrer"
                                 className="text-gray-400 hover:text-indigo-600 transition-colors"
@@ -1036,6 +1112,78 @@ const repoRes = await apiFetch("/api/repositories", {
                           </div>
                         </div>
 
+                        {editingRepoId === repo.id ? (
+                          <div className="space-y-2 text-right">
+                            <input
+                              value={editRepoTitle}
+                              onChange={(e) => setEditRepoTitle(e.target.value)}
+                              placeholder="اسم المشروع"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:ring-2 focus:ring-indigo-400"
+                              data-testid={`input-edit-title-${repo.id}`}
+                            />
+                            <textarea
+                              value={editRepoDesc}
+                              onChange={(e) => setEditRepoDesc(e.target.value)}
+                              placeholder="وصف المشروع"
+                              rows={2}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                              data-testid={`textarea-edit-desc-${repo.id}`}
+                            />
+                            <input
+                              value={editRepoTechs}
+                              onChange={(e) => setEditRepoTechs(e.target.value)}
+                              placeholder="التقنيات (مفصولة بفاصلة)"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:ring-2 focus:ring-indigo-400"
+                              data-testid={`input-edit-techs-${repo.id}`}
+                            />
+                            <input
+                              value={editRepoUrl}
+                              onChange={(e) => setEditRepoUrl(e.target.value)}
+                              placeholder="رابط GitHub"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:ring-2 focus:ring-indigo-400"
+                              data-testid={`input-edit-url-${repo.id}`}
+                            />
+                            <input
+                              value={editRepoLive}
+                              onChange={(e) => setEditRepoLive(e.target.value)}
+                              placeholder="رابط العرض الحي"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:ring-2 focus:ring-indigo-400"
+                              data-testid={`input-edit-live-${repo.id}`}
+                            />
+                            <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => setEditRepoIsPublic(true)}
+                                  className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${editRepoIsPublic ? "bg-indigo-600 text-white" : "text-gray-500 border border-gray-200"}`}>
+                                  <Globe size={12} /> عام
+                                </button>
+                                <button type="button" onClick={() => setEditRepoIsPublic(false)}
+                                  className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${!editRepoIsPublic ? "bg-gray-700 text-white" : "text-gray-500 border border-gray-200"}`}>
+                                  🔒 خاص
+                                </button>
+                              </div>
+                              <span className="text-xs font-medium text-gray-600">مستوى الخصوصية</span>
+                            </div>
+                            <div className="flex gap-2 justify-end pt-1">
+                              <button
+                                onClick={handleCancelEditRepo}
+                                className="flex items-center gap-1 rounded-full px-4 py-1.5 text-xs font-semibold border border-gray-300 text-gray-600 hover:bg-gray-50"
+                                data-testid={`button-cancel-edit-${repo.id}`}
+                              >
+                                <X size={13} /> إلغاء
+                              </button>
+                              <button
+                                onClick={() => handleSaveRepoEdit(repo.id)}
+                                disabled={savingRepoEdit || !editRepoTitle.trim()}
+                                className="flex items-center gap-1 rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                                style={{ background: "linear-gradient(90deg,#4f46e5,#7c3aed)" }}
+                                data-testid={`button-save-edit-${repo.id}`}
+                              >
+                                {savingRepoEdit ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} حفظ
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                        <>
                         {/* Privacy badge */}
                         <div className="flex justify-end mb-2">
                           <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${repo.isPublic ? "bg-green-50 text-green-700 border border-green-100" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
@@ -1058,7 +1206,9 @@ const repoRes = await apiFetch("/api/repositories", {
                             <p className="text-xs font-semibold text-gray-600">📁 ملفات الأكواد:</p>
                             <div className="flex flex-wrap gap-2 mt-1">
                               {repo.codeFilesUrls.map((url: string, idx: number) => (
-                                <a key={idx} href={url} target="_blank" rel="noreferrer" className="text-xs text-indigo-500 underline">ملف {idx + 1}</a>
+                                <a key={idx} href={url} download target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-indigo-500 underline">
+                                  <Download size={11} /> ملف {idx + 1}
+                                </a>
                               ))}
                             </div>
                           </div>
@@ -1069,21 +1219,30 @@ const repoRes = await apiFetch("/api/repositories", {
                             <p className="text-xs font-semibold text-gray-600">📄 ملفات PDF:</p>
                             <div className="flex flex-wrap gap-2 mt-1">
                               {repo.pdfFilesUrls.map((url: string, idx: number) => (
-                                <a key={idx} href={url} target="_blank" rel="noreferrer" className="text-xs text-indigo-500 underline">PDF {idx + 1}</a>
+                                <a key={idx} href={url} download target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-indigo-500 underline">
+                                  <Download size={11} /> PDF {idx + 1}
+                                </a>
                               ))}
                             </div>
                           </div>
                         )}
 
                         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <Star size={11} />
+                          <button
+                            onClick={() => handleToggleRepoLike(repo.id)}
+                            className={`flex items-center gap-1 text-xs transition-colors ${repo.liked ? "text-amber-500" : "text-gray-400 hover:text-amber-500"}`}
+                            title="تقييم المشروع"
+                            data-testid={`button-like-repo-${repo.id}`}
+                          >
+                            <Star size={13} fill={repo.liked ? "currentColor" : "none"} />
                             <span>{repo.likes ?? 0}</span>
-                          </div>
+                          </button>
                           <span className="text-xs text-gray-400">
                             {repo.createdAt ? new Date(repo.createdAt).toLocaleDateString("ar-SA", { year: "numeric", month: "short" }) : ""}
                           </span>
                         </div>
+                        </>
+                        )}
                         </div>{/* end p-5 */}
                       </div>
                     ))}
