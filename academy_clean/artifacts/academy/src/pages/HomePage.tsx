@@ -3,7 +3,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useGetFeaturedRepositories, useGetPlatformStats, useGetLeaderboard } from "@workspace/api-client-react";
 import { Star, Map, Code2, Layers, Users, Trophy, BookOpen, GitBranch } from "lucide-react";
-import { apiFetch, apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api-fetch";
 import { Link, useLocation } from "wouter";
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -227,7 +227,7 @@ const [, navigate] = useLocation();
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {((Array.isArray(repos) ? repos : (repos as any)?.data ?? (repos as any)?.items ?? []) ?? [])
               .slice(0, 6)
-              .map((repo) => (
+              .map((repo: any) => (
               <div
                 key={repo.id}
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-lg transition-shadow"
@@ -260,7 +260,7 @@ const [, navigate] = useLocation();
                   <h3 className="font-bold text-gray-900 mb-1 text-right">{repo.title}</h3>
                   <p className="text-gray-500 text-sm mb-3 text-right line-clamp-2">{repo.description}</p>
                   <div className="flex flex-wrap gap-1.5 justify-end">
-                    {(repo.technologies ?? []).map((tech) => (
+                    {(repo.technologies ?? []).map((tech: string) => (
                       <span
                         key={tech}
                         className="text-xs rounded-full px-2.5 py-0.5 font-medium border"
