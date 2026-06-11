@@ -17,7 +17,7 @@ Run from the repo root (`academy_clean/`).
 - Single-package typecheck: `pnpm --filter @workspace/academy run typecheck`
 - No test suite is currently configured.
 
-The Laravel API backend must be running on `http://localhost:8000` (the Vite dev server proxies `/api`, `/sanctum`, and `/storage` to it).
+The Laravel API backend must be running on `http://localhost:8000` (the Vite dev server proxies `/api`, `/sanctum`, `/storage`, and `/auth` to it).
 
 ## Workspace layout
 
@@ -38,7 +38,7 @@ When changing an API endpoint's request/response shape, update `openapi.yaml` an
 
 ### Frontend (`artifacts/academy`)
 
-- Vite config aliases `@` → `src/`. Dev server proxies `/api`, `/sanctum`, and `/storage` to `http://localhost:8000` (the Laravel backend).
+- Vite config aliases `@` → `src/`. Dev server proxies `/api`, `/sanctum`, `/storage`, and `/auth` to `http://localhost:8000` (the Laravel backend).
 - `src/lib/api-fetch.ts` — `apiFetch()` wrapper around `fetch` for legacy/manual calls: sends credentials, fetches a CSRF cookie via `/sanctum/csrf-cookie` and attaches `X-XSRF-TOKEN` for state-changing requests.
 - `src/lib/auth-context.tsx` — auth/session React context.
 - Prefer using the generated hooks from `@workspace/api-client-react` for new API calls over `apiFetch`.
