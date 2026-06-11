@@ -18,7 +18,22 @@ import { useCreateChallenge } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api-fetch";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-type AdminTab = "overview" | "users" | "courses" | "engagement" | "activity";
+type AdminTab = "overview" | "users" | "courses" | "assignments" | "challenges" | "engagement" | "activity";
+
+type AssignmentItem = {
+  id: number;
+  course_id: number;
+  title: string;
+  question: string;
+  description: string | null;
+  requirements: string | null;
+  difficulty: number;
+  language: string | null;
+  assignment_order: number;
+  points: number;
+  is_active: boolean;
+  due_date: string | null;
+};
 
 type LoginLog = {
   id: number;
@@ -212,6 +227,24 @@ export default function AdminPage() {
   const [reviews, setReviews] = useState<ReviewModeration[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [bannedUsers, setBannedUsers] = useState<Set<string>>(new Set());
+
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [assignmentsLoaded, setAssignmentsLoaded] = useState(false);
+  const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+  const [assignmentForm, setAssignmentForm] = useState({
+    course_id: "", title: "", question: "", description: "", requirements: "",
+    difficulty: "1", language: "", points: "10", assignment_order: "1", is_active: true,
+  });
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [assignmentError, setAssignmentError] = useState("");
+  const [editingAssignmentId, setEditingAssignmentId] = useState<number | null>(null);
+  const [editAssignmentForm, setEditAssignmentForm] = useState({
+    course_id: "", title: "", question: "", description: "", requirements: "",
+    difficulty: "1", language: "", points: "10", assignment_order: "1", is_active: true,
+  });
+  const [editAssignmentSaving, setEditAssignmentSaving] = useState(false);
+  const [editAssignmentError, setEditAssignmentError] = useState("");
 
   const { data: usersData, refetch: refetchUsers } = useListUsers();
   const { data: coursesData, refetch: refetchCourses } = useListCourses();
@@ -666,10 +699,123 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
     } catch { /* silent */ }
   };
 
+  const loadAssignments = async () => {
+    setAssignmentsLoading(true);
+    try {
+      const res = await apiFetch("/api/admin/assignments");
+      if (!res.ok) throw new Error("failed");
+      const data = await res.json() as { assignments?: AssignmentItem[] };
+      setAssignments(data.assignments ?? []);
+      setAssignmentsLoaded(true);
+    } catch {
+      setAssignments([]);
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  };
+
+  const handleCreateAssignment = async () => {
+    setAssignmentSaving(true);
+    setAssignmentError("");
+    try {
+      const res = await apiFetch("/api/assignments", {
+        method: "POST",
+        body: JSON.stringify({
+          course_id: Number(assignmentForm.course_id),
+          title: assignmentForm.title,
+          question: assignmentForm.question,
+          description: assignmentForm.description || null,
+          requirements: assignmentForm.requirements || null,
+          difficulty: Number(assignmentForm.difficulty),
+          language: assignmentForm.language || null,
+          assignment_order: Number(assignmentForm.assignment_order) || 1,
+          points: Number(assignmentForm.points) || 0,
+          is_active: assignmentForm.is_active,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? "فشل إنشاء التكليف");
+      }
+      const created = await res.json() as AssignmentItem;
+      setAssignments((prev) => [created, ...prev]);
+      setShowAssignmentForm(false);
+      setAssignmentForm({
+        course_id: "", title: "", question: "", description: "", requirements: "",
+        difficulty: "1", language: "", points: "10", assignment_order: "1", is_active: true,
+      });
+    } catch (e: any) {
+      setAssignmentError(e?.message ?? "فشل إنشاء التكليف");
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
+
+  const startEditAssignment = (a: AssignmentItem) => {
+    setEditingAssignmentId(a.id);
+    setEditAssignmentForm({
+      course_id: String(a.course_id),
+      title: a.title,
+      question: a.question,
+      description: a.description ?? "",
+      requirements: a.requirements ?? "",
+      difficulty: String(a.difficulty ?? 1),
+      language: a.language ?? "",
+      points: String(a.points ?? 0),
+      assignment_order: String(a.assignment_order ?? 1),
+      is_active: a.is_active,
+    });
+    setEditAssignmentError("");
+  };
+
+  const handleUpdateAssignment = async () => {
+    if (editingAssignmentId == null) return;
+    setEditAssignmentSaving(true);
+    setEditAssignmentError("");
+    try {
+      const res = await apiFetch(`/api/assignments/${editingAssignmentId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          course_id: Number(editAssignmentForm.course_id),
+          title: editAssignmentForm.title,
+          question: editAssignmentForm.question,
+          description: editAssignmentForm.description || null,
+          requirements: editAssignmentForm.requirements || null,
+          difficulty: Number(editAssignmentForm.difficulty),
+          language: editAssignmentForm.language || null,
+          assignment_order: Number(editAssignmentForm.assignment_order) || 1,
+          points: Number(editAssignmentForm.points) || 0,
+          is_active: editAssignmentForm.is_active,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? "فشل تحديث التكليف");
+      }
+      const updated = await res.json() as AssignmentItem;
+      setAssignments((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+      setEditingAssignmentId(null);
+    } catch (e: any) {
+      setEditAssignmentError(e?.message ?? "فشل تحديث التكليف");
+    } finally {
+      setEditAssignmentSaving(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (id: number) => {
+    if (!window.confirm("هل أنت متأكد من حذف هذا التكليف؟")) return;
+    try {
+      const res = await apiFetch(`/api/assignments/${id}`, { method: "DELETE" });
+      if (res.ok) setAssignments((prev) => prev.filter((a) => a.id !== id));
+    } catch { /* silent */ }
+  };
+
   const TABS: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
     { key: "overview", label: "نظرة عامة", icon: <BarChart2 size={16} /> },
     { key: "users", label: "إدارة المستخدمين", icon: <Users size={16} /> },
     { key: "courses", label: "إدارة الكورسات", icon: <BookOpen size={16} /> },
+    { key: "assignments", label: "التكليفات", icon: <FileText size={16} /> },
+    { key: "challenges", label: "إدارة التحديات البرمجية", icon: <Trophy size={16} /> },
     { key: "engagement", label: "Likes & Comments", icon: <MessageCircle size={16} /> },
     { key: "activity", label: "سجل النشاط", icon: <Activity size={16} /> },
   ];
@@ -726,6 +872,7 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
           ))}
         </div>
 
+        {activeTab === "challenges" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <button
@@ -814,6 +961,7 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
             )}
           </div>
         </div>
+        )}
 
         {/* Overview */}
         {activeTab === "overview" && (
@@ -1166,6 +1314,119 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Assignments Management */}
+        {activeTab === "assignments" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <button onClick={() => { setShowAssignmentForm((p) => !p); setAssignmentError(""); }}
+                className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(90deg,#0f766e,#14b8a6)" }}>
+                {showAssignmentForm ? <X size={16} /> : <Plus size={16} />}
+                {showAssignmentForm ? "إلغاء" : "إضافة تكليف جديد"}
+              </button>
+              <h3 className="font-bold text-gray-900 text-lg">إدارة التكليفات</h3>
+            </div>
+
+            {showAssignmentForm && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <select value={assignmentForm.course_id} onChange={(e) => setAssignmentForm((p) => ({ ...p, course_id: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right bg-white">
+                  <option value="">اختر الكورس</option>
+                  {courses.map((c: Course) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+                <input value={assignmentForm.title} onChange={(e) => setAssignmentForm((p) => ({ ...p, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="عنوان التكليف" />
+                <textarea value={assignmentForm.question} onChange={(e) => setAssignmentForm((p) => ({ ...p, question: e.target.value }))} rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="نص السؤال / المطلوب من المتدرب" />
+                <textarea value={assignmentForm.description} onChange={(e) => setAssignmentForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="وصف إضافي (اختياري)" />
+                <textarea value={assignmentForm.requirements} onChange={(e) => setAssignmentForm((p) => ({ ...p, requirements: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="المتطلبات (اختياري)" />
+                <select value={assignmentForm.difficulty} onChange={(e) => setAssignmentForm((p) => ({ ...p, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right bg-white">
+                  {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>مستوى الصعوبة: {d}</option>)}
+                </select>
+                <input value={assignmentForm.language} onChange={(e) => setAssignmentForm((p) => ({ ...p, language: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="لغة البرمجة (اختياري)" />
+                <input value={assignmentForm.points} onChange={(e) => setAssignmentForm((p) => ({ ...p, points: e.target.value }))} type="number" min="0" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="النقاط" />
+                <input value={assignmentForm.assignment_order} onChange={(e) => setAssignmentForm((p) => ({ ...p, assignment_order: e.target.value }))} type="number" min="1" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="ترتيب التكليف" />
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <input type="checkbox" checked={assignmentForm.is_active} onChange={(e) => setAssignmentForm((p) => ({ ...p, is_active: e.target.checked }))} />
+                  مفعّل (يظهر للمتدربين)
+                </label>
+                {assignmentError && <div className="md:col-span-2 text-sm text-red-600">{assignmentError}</div>}
+                <div className="md:col-span-2 flex justify-end">
+                  <button onClick={handleCreateAssignment} disabled={!assignmentForm.course_id || !assignmentForm.title || !assignmentForm.question || assignmentSaving} className="rounded-full px-8 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#0f766e,#14b8a6)" }}>
+                    {assignmentSaving ? "جاري الحفظ..." : "حفظ التكليف"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <button onClick={() => void loadAssignments()} className="text-sm font-semibold text-indigo-600">تحديث</button>
+                <h4 className="font-bold text-gray-900 text-right">{assignments.length} تكليف</h4>
+              </div>
+              <div className="divide-y divide-gray-50 p-4 space-y-3">
+                {assignmentsLoading ? (
+                  <p className="text-center text-sm text-gray-400 py-4">جاري التحميل...</p>
+                ) : !assignmentsLoaded ? (
+                  <button onClick={() => void loadAssignments()} className="mx-auto block mt-2 text-xs text-indigo-500 underline">تحميل التكليفات</button>
+                ) : assignments.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-4">لا توجد تكليفات بعد</p>
+                ) : (
+                  assignments.map((a) => (
+                    <div key={a.id} className="rounded-2xl border border-gray-100 p-4">
+                      {editingAssignmentId === a.id ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <select value={editAssignmentForm.course_id} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, course_id: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
+                            {courses.map((c: Course) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                          </select>
+                          <input value={editAssignmentForm.title} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="عنوان التكليف" />
+                          <textarea value={editAssignmentForm.question} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, question: e.target.value }))} rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="نص السؤال" />
+                          <textarea value={editAssignmentForm.description} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="وصف إضافي" />
+                          <textarea value={editAssignmentForm.requirements} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, requirements: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="المتطلبات" />
+                          <select value={editAssignmentForm.difficulty} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
+                            {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>مستوى الصعوبة: {d}</option>)}
+                          </select>
+                          <input value={editAssignmentForm.language} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, language: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="لغة البرمجة" />
+                          <input value={editAssignmentForm.points} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, points: e.target.value }))} type="number" min="0" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="النقاط" />
+                          <input value={editAssignmentForm.assignment_order} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, assignment_order: e.target.value }))} type="number" min="1" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="ترتيب التكليف" />
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input type="checkbox" checked={editAssignmentForm.is_active} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, is_active: e.target.checked }))} />
+                            مفعّل (يظهر للمتدربين)
+                          </label>
+                          {editAssignmentError && <div className="md:col-span-2 text-sm text-red-600">{editAssignmentError}</div>}
+                          <div className="md:col-span-2 flex justify-end gap-2">
+                            <button onClick={() => setEditingAssignmentId(null)} className="rounded-full px-5 py-2 text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">
+                              إلغاء
+                            </button>
+                            <button onClick={handleUpdateAssignment} disabled={editAssignmentSaving} className="rounded-full px-6 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#0f766e,#14b8a6)" }}>
+                              {editAssignmentSaving ? "جاري الحفظ..." : "حفظ التعديلات"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => startEditAssignment(a)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
+                              <Pencil size={12} /> تعديل
+                            </button>
+                            <button onClick={() => handleDeleteAssignment(a.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
+                              <Trash2 size={12} /> حذف
+                            </button>
+                          </div>
+                          <div className="text-right flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 text-sm">{a.title}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {courses.find((c: Course) => c.id === a.course_id)?.title ?? `كورس #${a.course_id}`} ·{" "}
+                              مستوى {a.difficulty} · {a.points} نقطة{a.is_active ? "" : " · غير مفعّل"}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

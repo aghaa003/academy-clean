@@ -4,7 +4,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import {
   Trophy, Code2, Star, FolderGit2, BookOpen, Loader2,
-  ExternalLink, FileText, Download, Globe,
+  ExternalLink, Download, Globe,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -18,12 +18,21 @@ interface PublicUser {
   bio: string | null;
   role: string;
   points: number;
+  globalRank: number;
   createdAt: string;
   solvedChallenges: number;
   totalCourses: number;
   totalRepositories: number;
   totalSubmissions: number;
   challengeCategories: any[];
+}
+
+interface UserCourse {
+  id: number;
+  title: string;
+  thumbnailUrl: string | null;
+  progress: number;
+  completed: boolean;
 }
 
 interface PublicRepo {
@@ -56,17 +65,6 @@ function techColor(t: string) {
   return TECH_COLORS[k] ?? "#6b7280";
 }
 
-function fileLabel(url: string): string {
-  try {
-    const parts = new URL(url, window.location.origin).pathname.split("/");
-    const name = parts[parts.length - 1] ?? "";
-    // strip timestamp prefix like "1715800000000_filename.ext"
-    return name.replace(/^\d+_/, "").slice(0, 40) || name;
-  } catch {
-    return url.split("/").pop()?.slice(0, 40) ?? "ملف";
-  }
-}
-
 export default function PublicProfilePage() {
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
@@ -78,7 +76,10 @@ export default function PublicProfilePage() {
   const [repos, setRepos] = useState<PublicRepo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "projects">("overview");
+  const [courses, setCourses] = useState<UserCourse[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "courses">("overview");
 
   useEffect(() => {
     if (!userId) return;
@@ -110,6 +111,19 @@ export default function PublicProfilePage() {
       })
       .catch(() => {})
       .finally(() => setReposLoading(false));
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    setCoursesLoading(true);
+    apiFetch(`/api/users/${encodeURIComponent(userId)}/courses`, )
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        setCourses(data ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setCoursesLoading(false));
   }, [userId]);
 
   const joinDate = profile?.createdAt
@@ -162,6 +176,7 @@ export default function PublicProfilePage() {
 
                   <div className="flex gap-6 mt-5 flex-row-reverse flex-wrap">
                     {[
+                      { label: "الترتيب العام", value: `#${profile.globalRank}`, icon: <Trophy size={14} className="text-yellow-300" /> },
                       { label: "نقطة", value: profile.points.toLocaleString(), icon: <Star size={14} className="text-amber-300" /> },
                       { label: "تحدي محلول", value: profile.solvedChallenges, icon: <Code2 size={14} className="text-cyan-300" /> },
                       { label: "مشروع عام", value: repos.length, icon: <FolderGit2 size={14} className="text-purple-300" /> },
@@ -182,6 +197,7 @@ export default function PublicProfilePage() {
             <div className="flex gap-2 border-b border-gray-200">
               {([
                 { key: "overview", label: "نظرة عامة" },
+                { key: "courses", label: `الكورسات (${courses.length})` },
                 { key: "projects", label: `المشاريع العامة (${repos.length})` },
               ] as const).map((t) => (
                 <button
@@ -255,6 +271,52 @@ export default function PublicProfilePage() {
               </div>
             )}
 
+            {/* Courses Tab */}
+            {activeTab === "courses" && (
+              <div>
+                {coursesLoading ? (
+                  <div className="flex items-center justify-center py-12 text-gray-400 gap-2">
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>جاري تحميل الكورسات...</span>
+                  </div>
+                ) : courses.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
+                    لم يلتحق هذا المستخدم بأي كورس حتى الآن
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {courses.map((c) => (
+                      <Link key={c.id} href={`/courses/${c.id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 flex-row-reverse hover:border-indigo-200 transition-colors">
+                        <div className="flex-1 text-right">
+                          <div className="flex items-center justify-between flex-row-reverse gap-2">
+                            <h3 className="font-bold text-gray-900 text-base">{c.title}</h3>
+                            {c.completed ? (
+                              <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
+                                مكتمل
+                              </span>
+                            ) : (
+                              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2.5 py-1">
+                                قيد المشاهدة
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-3 flex items-center gap-3 flex-row-reverse">
+                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-indigo-500"
+                                style={{ width: `${Math.min(100, Math.max(0, c.progress))}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold text-gray-500 shrink-0">{c.progress}%</span>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Projects Tab */}
             {activeTab === "projects" && (
               <div>
@@ -321,20 +383,19 @@ export default function PublicProfilePage() {
 
                         {/* Uploaded code files */}
                         {(repo.codeFilesUrls ?? []).length > 0 && (
-                          <div className="mt-4 border-t border-gray-50 pt-3">
-                            <p className="text-xs font-semibold text-gray-500 text-right mb-2">ملفات الكود المرفوعة</p>
-                            <div className="flex flex-wrap gap-2 justify-end">
+                          <div className="mt-3 text-right">
+                            <p className="text-xs font-semibold text-gray-600">📁 ملفات الأكواد:</p>
+                            <div className="flex flex-wrap gap-2 mt-1 justify-end">
                               {(repo.codeFilesUrls ?? []).map((url, i) => (
                                 <a
                                   key={i}
                                   href={url}
+                                  download
                                   target="_blank"
                                   rel="noreferrer"
-                                  download
-                                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                                  className="flex items-center gap-1 text-xs text-indigo-500 underline"
                                 >
-                                  <Download size={11} />
-                                  {fileLabel(url)}
+                                  <Download size={11} /> ملف {i + 1}
                                 </a>
                               ))}
                             </div>
@@ -343,19 +404,19 @@ export default function PublicProfilePage() {
 
                         {/* Uploaded PDF files */}
                         {(repo.pdfFilesUrls ?? []).length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs font-semibold text-gray-500 text-right mb-2">ملفات PDF</p>
-                            <div className="flex flex-wrap gap-2 justify-end">
+                          <div className="mt-2 text-right">
+                            <p className="text-xs font-semibold text-gray-600">📄 ملفات PDF:</p>
+                            <div className="flex flex-wrap gap-2 mt-1 justify-end">
                               {(repo.pdfFilesUrls ?? []).map((url, i) => (
                                 <a
                                   key={i}
                                   href={url}
+                                  download
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors"
+                                  className="flex items-center gap-1 text-xs text-indigo-500 underline"
                                 >
-                                  <FileText size={11} />
-                                  {fileLabel(url)}
+                                  <Download size={11} /> PDF {i + 1}
                                 </a>
                               ))}
                             </div>

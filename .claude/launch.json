@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "academy-frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\aghaa\\Desktop\\academy_clean\\academy_clean && pnpm run dev:frontend"],
+      "port": 5173
+    },
+    {
+      "name": "laravel-backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d \"C:\\Users\\aghaa\\Desktop\\testlaravel - Copy - Copy\" && php artisan serve"],
+      "port": 8000
+    }
+  ]
+}

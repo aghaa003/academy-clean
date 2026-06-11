@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "academy-frontend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:frontend"],
+      "port": 5173
+    },
+    {
+      "name": "laravel-backend",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["artisan", "serve"],
+      "port": 8000
+    }
+  ]
+}

@@ -60,6 +60,20 @@ import { apiFetch } from "@/lib/api-fetch";
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifLoading, setNotifLoading] = useState(false);
     const notifRef = useRef<HTMLDivElement | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState(user?.imageUrl ?? "");
+
+    useEffect(() => {
+      setAvatarUrl(user?.imageUrl ?? "");
+    }, [user?.imageUrl]);
+
+    useEffect(() => {
+      const handler = (e: Event) => {
+        const detail = (e as CustomEvent<{ imageUrl?: string | null }>).detail;
+        if (detail?.imageUrl !== undefined) setAvatarUrl(detail.imageUrl ?? "");
+      };
+      window.addEventListener("academy:user-updated", handler);
+      return () => window.removeEventListener("academy:user-updated", handler);
+    }, []);
 
     useEffect(() => {
       if (!user) return;
@@ -240,10 +254,14 @@ import { apiFetch } from "@/lib/api-fetch";
                     <ChevronDown size={12} className="text-white/60" />
                     <span className="hidden sm:block">{displayName}</span>
                     <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs border-2 border-cyan-400/40"
+                      className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-xs border-2 border-cyan-400/40"
                       style={{ background: "linear-gradient(135deg,#60a5fa,#3730a3)" }}
                     >
-                      {initials || user.firstName?.charAt(0) || "م"}
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        initials || user.firstName?.charAt(0) || "م"
+                      )}
                     </div>
                   </button>
                   {userMenuOpen && (

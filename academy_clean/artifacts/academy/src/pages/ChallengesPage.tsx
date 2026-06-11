@@ -119,6 +119,15 @@ function saveMyChallenges(list: MyChallenge[]) {
   localStorage.setItem(MY_CHALLENGES_KEY, JSON.stringify(list));
 }
 
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
 interface ReviewResult {
   isCorrect: boolean;
   score: number;
@@ -213,8 +222,14 @@ useEffect(() => {
   };
 
   const handleSubmit = async () => {
-    const codeToReview = solution.trim() ||
-      (solutionFile ? `-- ملف مرفق: ${solutionFile.name}` : "");
+    let codeToReview = solution.trim();
+    if (!codeToReview && solutionFile) {
+      try {
+        codeToReview = await readFileAsText(solutionFile);
+      } catch {
+        codeToReview = "";
+      }
+    }
 
     if (!codeToReview) {
       setReviewError("الرجاء كتابة حلك أو رفع ملف الحل أولاً.");
@@ -561,36 +576,46 @@ const getHint = async () => {
             ))}
           </div>
 
-          {[
-            { 
-              label: "المستوى الحالي",
-              value: challengeStats.total > 0 ? Math.round((challengeStats.solved / challengeStats.total) * 100) : 0,
-              color: "#3730a3" 
-            },
-            { 
-              label: "التحديات السهلة",
-              value: (challengeStats as any).easyTotal > 0 ? Math.round(((challengeStats as any).easySolved / (challengeStats as any).easyTotal) * 100) : 0,
-              color: "#16a34a",
-              extra: `${(challengeStats as any).easySolved ?? 0}/${(challengeStats as any).easyTotal ?? 0}` 
-            },
-            { 
-              label: "التحديات المتوسطة",
-              value: (challengeStats as any).mediumTotal > 0 ? Math.round(((challengeStats as any).mediumSolved / (challengeStats as any).mediumTotal) * 100) : 0,
-              color: "#ca8a04",
-              extra: `${(challengeStats as any).mediumSolved ?? 0}/${(challengeStats as any).mediumTotal ?? 0}` 
-            },
-            { 
-              label: "التحديات الصعبة",
-              value: (challengeStats as any).hardTotal > 0 ? Math.round(((challengeStats as any).hardSolved / (challengeStats as any).hardTotal) * 100) : 0,
-              color: "#dc2626",
-              extra: `${(challengeStats as any).hardSolved ?? 0}/${(challengeStats as any).hardTotal ?? 0}` 
-            },
-          ].map((state) => (
-            <div key={state.label} className="bg-gray-50 rounded-xl p-3 text-center">
-              <div className="text-xl font-extrabold text-indigo-600">{state.value}{state.extra ? ` (${state.extra})` : ''}</div>
-              <div className="text-xs text-gray-500 mt-0.5 leading-tight">{state.label}</div>
-            </div>
-          ))}
+          <div className="space-y-4">
+            {[
+              {
+                label: "المستوى الحالي",
+                value: challengeStats.total > 0 ? Math.round((challengeStats.solved / challengeStats.total) * 100) : 0,
+                color: "#3730a3",
+              },
+              {
+                label: "التحديات السهلة",
+                value: (challengeStats as any).easyTotal > 0 ? Math.round(((challengeStats as any).easySolved / (challengeStats as any).easyTotal) * 100) : 0,
+                color: "#16a34a",
+                extra: `${(challengeStats as any).easySolved ?? 0}/${(challengeStats as any).easyTotal ?? 0}`,
+              },
+              {
+                label: "التحديات المتوسطة",
+                value: (challengeStats as any).mediumTotal > 0 ? Math.round(((challengeStats as any).mediumSolved / (challengeStats as any).mediumTotal) * 100) : 0,
+                color: "#ca8a04",
+                extra: `${(challengeStats as any).mediumSolved ?? 0}/${(challengeStats as any).mediumTotal ?? 0}`,
+              },
+              {
+                label: "التحديات الصعبة",
+                value: (challengeStats as any).hardTotal > 0 ? Math.round(((challengeStats as any).hardSolved / (challengeStats as any).hardTotal) * 100) : 0,
+                color: "#dc2626",
+                extra: `${(challengeStats as any).hardSolved ?? 0}/${(challengeStats as any).hardTotal ?? 0}`,
+              },
+            ].map((bar) => (
+              <div key={bar.label}>
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="text-gray-500">{bar.extra ?? `${bar.value}%`}</span>
+                  <span className="font-medium text-gray-700">{bar.label}</span>
+                </div>
+                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${bar.value}%`, backgroundColor: bar.color }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Leaderboard */}

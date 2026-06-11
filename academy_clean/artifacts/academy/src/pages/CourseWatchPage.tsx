@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useCurrentUser } from "@/lib/auth-context";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useGetCourse } from "@workspace/api-client-react";
@@ -68,6 +68,8 @@ export default function CourseWatchPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoaded } = useCurrentUser();
   const courseId = Number(id);
+  const search = useSearch();
+  const initialLessonId = Number(new URLSearchParams(search).get("lesson")) || null;
 
   const { data: course, isLoading } = useGetCourse(courseId, {
     query: { queryKey: ["course", courseId], enabled: !!courseId },
@@ -95,9 +97,12 @@ export default function CourseWatchPage() {
 
   useEffect(() => {
     if (lessons.length > 0 && activeLessonId === null) {
-      setActiveLessonId(lessons[0].id);
+      const target = initialLessonId && lessons.some((l) => l.id === initialLessonId)
+        ? initialLessonId
+        : lessons[0].id;
+      setActiveLessonId(target);
     }
-  }, [lessons, activeLessonId]);
+  }, [lessons, activeLessonId, initialLessonId]);
 
   const fetchCourseProgress = useCallback(async () => {
     if (!user || !courseId) return;
@@ -144,6 +149,22 @@ export default function CourseWatchPage() {
     }
   }, [activeLesson?.id]);
 
+  const resumeFromSavedPosition = useCallback(() => {
+    const v = videoRef.current;
+    if (!v || !activeLesson) return;
+    const saved = progressMap[activeLesson.id]?.watchedSeconds ?? 0;
+    if (saved > 1 && v.duration && saved < v.duration - 1) {
+      v.currentTime = saved;
+    }
+  }, [activeLesson, progressMap]);
+
+  // Resume if progress data arrives after the video metadata has already loaded
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !activeLesson) return;
+    if (v.readyState >= 1) resumeFromSavedPosition();
+  }, [progressMap, activeLesson?.id, resumeFromSavedPosition]);
+
   const saveProgress = useCallback(async (lessonId: number, watchedSeconds: number, completed: boolean) => {
   if (!user) return;
   try {
@@ -164,6 +185,9 @@ export default function CourseWatchPage() {
     const pct = v.duration ? (v.currentTime / v.duration) * 100 : 0;
     setVideoProgress(pct);
     if (progressSaveTimer.current) clearTimeout(progressSaveTimer.current);
+    // Avoid persisting "0 seconds watched" — this happens on initial load
+    // before any resume/seek occurs and would overwrite real saved progress.
+    if (watched <= 0) return;
     progressSaveTimer.current = setTimeout(() => {
       saveProgress(activeLesson.id, watched, pct > 90);
     }, 3000);
@@ -314,6 +338,7 @@ export default function CourseWatchPage() {
                   ref={videoRef}
                   className="w-full h-full object-contain"
                   onTimeUpdate={handleVideoTimeUpdate}
+                  onLoadedMetadata={resumeFromSavedPosition}
                   onEnded={handleVideoEnded}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}

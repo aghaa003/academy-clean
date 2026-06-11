@@ -6,11 +6,20 @@ import { useGetUserStats, useGetLeaderboard, useListCourses } from "@workspace/a
 import {
   Camera, ChevronDown, Trophy, BookOpen, Code2,
   Star, BarChart2, Shield, User, FolderGit2, Plus, ExternalLink, Loader2, Globe, Trash2,
-  Pencil, Download, Save, X,
+  Pencil, Download, Save, X, PlayCircle,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
 type Tab = "personal" | "courses" | "dashboard" | "settings" | "projects";
+
+interface EnrollmentItem {
+  id: number;
+  course: { id: number; title: string; category?: string } | null;
+  progress: number;
+  completed: boolean;
+  lastLessonId: number | null;
+  lastWatchedSeconds: number;
+}
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -121,6 +130,23 @@ useEffect(() => {
   const { data: coursesData } = useListCourses({});
 
   const courses = coursesData?.courses ?? [];
+
+  const [enrollments, setEnrollments] = useState<EnrollmentItem[]>([]);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setEnrollmentsLoading(true);
+    apiFetch("/api/enrollments")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        setEnrollments(data?.enrollments ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setEnrollmentsLoading(false));
+  }, [user?.id]);
+
   const leaderboard = leaderboardData ?? [];
   const userRank = leaderboard.findIndex((entry) => entry.user?.username === user?.username) + 1;
 
@@ -818,6 +844,54 @@ const repoRes = await apiFetch("/api/repositories", {
             {/* ── Courses tab ── */}
             {activeTab === "courses" && (
               <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-6 text-right">كورساتي</h2>
+                {enrollmentsLoading ? (
+                  <div className="flex items-center justify-center py-8 text-gray-400 gap-2">
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>جاري التحميل...</span>
+                  </div>
+                ) : enrollments.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-sm mb-6">
+                    لم تلتحق بأي كورس بعد
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+                    {enrollments.filter((e) => e.course).map((e) => (
+                      <div key={e.id} className="p-4 rounded-xl border border-gray-100 flex flex-col gap-3 text-right">
+                        <div className="flex items-center justify-between flex-row-reverse gap-2">
+                          <h3 className="font-semibold text-gray-900 text-sm">{e.course!.title}</h3>
+                          {e.completed ? (
+                            <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-1 shrink-0">
+                              مكتمل
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2.5 py-1 shrink-0">
+                              قيد المشاهدة
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 flex-row-reverse">
+                          <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-indigo-500"
+                              style={{ width: `${Math.min(100, Math.max(0, e.progress))}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold text-gray-500 shrink-0">{e.progress}%</span>
+                        </div>
+                        <Link
+                          href={e.lastLessonId ? `/courses/${e.course!.id}?lesson=${e.lastLessonId}` : `/courses/${e.course!.id}`}
+                          className="self-start flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white transition-all"
+                          style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
+                        >
+                          <PlayCircle size={14} />
+                          متابعة
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <h2 className="text-xl font-bold text-gray-900 mb-6 text-right">الكورسات المتاحة</h2>
                 {courses.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">

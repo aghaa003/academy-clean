@@ -100,10 +100,17 @@ type ProjectStatus = "inProgress" | "done";
 
 interface Assignment {
   id: number;
-  lang: AssignmentLang;
+  course_id: number;
   title: string;
-  problem: string;
-  example: string;
+  question: string;
+  description: string | null;
+  requirements: string | null;
+  difficulty: number;
+  language: string | null;
+  points: number;
+  assignment_order: number;
+  completed?: boolean;
+  score?: number | null;
 }
 
 interface Project {
@@ -138,105 +145,6 @@ const BASICS_LANGS: BasicsLang[] = ["C", "C++", "C#", "SQL", "MySQL", "CS50"];
 const FRONTEND_LANGS: FrontendLang[] = ["HTML", "CSS", "JavaScript", "React", "Tailwind CSS", "Bootstrap", "Angular", "Vue.js"];
 const BACKEND_LANGS: BackendLang[] = ["Laravel", "PHP", "Node.js", "Python", "MongoDB", "Express.js", "Next.js", "ASP.NET", "Django", "Flask"];
 
-const ASSIGNMENTS: Assignment[] = [
-  // ── C ──
-  { id: 1, lang: "C", title: "طباعة الأعداد الزوجية", problem: "اكتب برنامجاً في لغة C يطلب من المستخدم إدخال عدد صحيح، ثم يطبع جميع الأعداد الزوجية من 1 إلى هذا العدد.", example: "أدخل عدداً: 10\nالأعداد الزوجية: 2، 4، 6، 8، 10" },
-  { id: 2, lang: "C", title: "حساب مجموع الأرقام", problem: "اكتب برنامجاً يحسب مجموع أرقام عدد صحيح موجب مدخل من المستخدم.", example: "أدخل عدداً: 1234\nمجموع الأرقام = 10" },
-  { id: 3, lang: "C", title: "البحث عن الأعداد الأولية", problem: "اكتب برنامجاً يطبع جميع الأعداد الأولية بين 1 و100 باستخدام لغة C.", example: "2 3 5 7 11 13 ..." },
-  // ── C++ ──
-  { id: 4, lang: "C++", title: "آلة حاسبة بسيطة", problem: "اكتب برنامجاً بلغة C++ ينفذ العمليات الحسابية الأربع (+، -، *، /) على عددين يدخلهما المستخدم مع التحقق من القسمة على صفر.", example: "أدخل العملية: 10 + 5\nالناتج = 15" },
-  { id: 5, lang: "C++", title: "مبدأ الوراثة", problem: "صمم هيكلاً يحتوي على كلاس أساسي Animal مع كلاسات مشتقة Dog وCat مع تطبيق الوراثة وتجاوز الدوال.", example: "Dog يرث من Animal\nيتجاوز دالة speak() لتطبع: نباح" },
-  { id: 6, lang: "C++", title: "مصفوفة ديناميكية", problem: "اكتب برنامجاً بلغة C++ يستخدم vector لتخزين أرقام المستخدم ثم يعرضها مرتبة تصاعدياً.", example: "أدخل أرقاماً: 5 2 8 1 9\nمرتبة: 1 2 5 8 9" },
-  // ── C# ──
-  { id: 7, lang: "C#", title: "قائمة المهام", problem: "أنشئ تطبيقاً بلغة C# يخزن مهام في قائمة مع إمكانية الإضافة والحذف والعرض.", example: "أضف مهمة: 'إنهاء التقرير'\nالمهام: [1] إنهاء التقرير" },
-  { id: 8, lang: "C#", title: "الواجهات Interfaces", problem: "أنشئ واجهة IShape مع دوال Area() و Perimeter()، ثم نفذها في كلاس Circle وRectangle.", example: "Circle.Area() = 78.5\nRectangle.Area() = 20" },
-  { id: 9, lang: "C#", title: "قراءة ملف نصي", problem: "اكتب برنامجاً بـ C# يقرأ ملفاً نصياً ويعد عدد الكلمات والأسطر فيه.", example: "عدد الأسطر: 10\nعدد الكلمات: 85" },
-  // ── SQL ──
-  { id: 10, lang: "SQL", title: "استعلام SELECT مع فلترة", problem: "أنشئ جدول Students وأضف 5 سجلات، ثم استعلم عن الطلاب الذين حصلوا على درجة أعلى من 80.", example: "SELECT name FROM Students WHERE grade > 80;" },
-  { id: 11, lang: "SQL", title: "ربط الجداول JOIN", problem: "صمم جدولين Orders و Customers وأنشئ استعلام INNER JOIN لعرض اسم العميل مع طلباته.", example: "SELECT c.name, o.product FROM Customers c INNER JOIN Orders o ON c.id = o.customer_id;" },
-  { id: 12, lang: "SQL", title: "تجميع البيانات GROUP BY", problem: "أنشئ استعلاماً يجمع إجمالي المبيعات لكل منطقة باستخدام GROUP BY وHAVING.", example: "SELECT region, SUM(sales) FROM Sales GROUP BY region HAVING SUM(sales) > 1000;" },
-  // ── MySQL ──
-  { id: 13, lang: "MySQL", title: "إنشاء قاعدة بيانات مكتبة", problem: "صمم قاعدة بيانات MySQL لمكتبة تحتوي على جداول: Books, Authors, Members, Loans مع العلاقات المناسبة.", example: "CREATE TABLE Books (id INT PRIMARY KEY, title VARCHAR(255), author_id INT, ...)" },
-  { id: 14, lang: "MySQL", title: "Stored Procedure", problem: "أنشئ Stored Procedure في MySQL تقبل رقم طالب وتعيد معدله الدراسي.", example: "CALL GetStudentGPA(1001);\n-- النتيجة: 3.75" },
-  { id: 15, lang: "MySQL", title: "التحسين بالفهارس", problem: "أضف فهارس Index مناسبة لجدول products كبير وقارن أداء الاستعلامات قبل وبعد الفهرسة.", example: "CREATE INDEX idx_category ON products(category_id);" },
-  // ── CS50 ──
-  { id: 16, lang: "CS50", title: "Caesar Cipher", problem: "نفذ خوارزمية Caesar Cipher بلغة C حيث يقبل البرنامج مفتاح التشفير ثم يشفر النص المدخل.", example: "المفتاح: 2\nالنص: Hello\nالمشفر: Jgnnq" },
-  { id: 17, lang: "CS50", title: "هرم ماريو", problem: "اكتب برنامجاً يرسم هرماً من علامات # بالعرض الذي يدخله المستخدم (1-8).", example: "العرض: 4\n   #\n  ##\n ###\n####" },
-  { id: 18, lang: "CS50", title: "حساب الباقي الصرف", problem: "اكتب برنامجاً يحسب أقل عدد من العملات المعدنية اللازمة للباقي (25, 10, 5, 1 سنتاً).", example: "المبلغ: 0.41\nعدد العملات: 4 (25+10+5+1)" },
-  // ── HTML ──
-  { id: 19, lang: "HTML", title: "صفحة تعريفية شخصية", problem: "صمم صفحة HTML تعريفية تحتوي على: رأس الصفحة، صورة، قسم عن النفس، قائمة بالمهارات، ومعلومات التواصل.", example: "<header>, <section>, <ul>, <footer> مع استخدام Semantic HTML5" },
-  { id: 20, lang: "HTML", title: "نموذج تسجيل", problem: "أنشئ نموذج HTML كامل للتسجيل يحتوي على: الاسم، البريد، كلمة المرور، التاريخ، القائمة المنسدلة، وزر الإرسال مع التحقق المدمج.", example: "<form>, <input type='email'>, <select>, <input type='submit'>" },
-  { id: 21, lang: "HTML", title: "جدول بيانات الطلاب", problem: "أنشئ جدول HTML يعرض بيانات 10 طلاب: الاسم، الدرجة، التقدير. مع دمج الخلايا وتنسيق الترويسة.", example: "<table>, <thead>, <tbody>, <tr>, <td>, <th> مع colspan/rowspan" },
-  // ── CSS ──
-  { id: 22, lang: "CSS", title: "تصميم بطاقة منتج", problem: "صمم بطاقة منتج احترافية باستخدام CSS تحتوي على: صورة، عنوان، وصف، سعر، وزر شراء مع تأثير hover.", example: "box-shadow، border-radius، transition، :hover pseudo-class" },
-  { id: 23, lang: "CSS", title: "شبكة صور Flexbox", problem: "أنشئ شبكة صور متجاوبة باستخدام Flexbox تعرض 6 بطاقات في صفوف 3×2 على الشاشة الكبيرة و1×6 على الموبايل.", example: "display: flex; flex-wrap: wrap; @media query للتجاوب" },
-  { id: 24, lang: "CSS", title: "قائمة تنقل متحركة", problem: "صمم قائمة تنقل أفقية مع: تأثير underline متحرك عند الـ hover، dropdown menu، وتحويل لـ hamburger menu في الموبايل.", example: "CSS transitions، :hover، position: absolute للـ dropdown" },
-  // ── JavaScript ──
-  { id: 25, lang: "JavaScript", title: "آلة حاسبة تفاعلية", problem: "أنشئ آلة حاسبة تفاعلية باستخدام HTML وCSS وJavaScript تدعم العمليات الأساسية مع تاريخ العمليات.", example: "addEventListener، querySelector، innerHTML، eval() أو منطق مخصص" },
-  { id: 26, lang: "JavaScript", title: "جلب بيانات من API", problem: "استخدم fetch() لجلب قائمة مستخدمين من https://jsonplaceholder.typicode.com/users وعرضهم في بطاقات.", example: "fetch(url).then(r => r.json()).then(data => { /* عرض البيانات */ })" },
-  { id: 27, lang: "JavaScript", title: "لعبة خمن الرقم", problem: "أنشئ لعبة 'خمن الرقم' حيث يختار البرنامج رقماً من 1-100 والمستخدم يخمن مع تلميحات (أكبر/أصغر) وعدد المحاولات.", example: "Math.random()، parseInt()، while loop أو event listeners" },
-  // ── React ──
-  { id: 28, lang: "React", title: "قائمة مهام Todo", problem: "أنشئ تطبيق Todo List بـ React مع: إضافة مهام، حذفها، تعليمها كمنجزة، وفلترة (الكل/النشطة/المنجزة) مع useState.", example: "useState، props، .map()، conditional rendering، event handlers" },
-  { id: 29, lang: "React", title: "جلب وعرض بيانات API", problem: "أنشئ مكون React يجلب قائمة منتجات من API وعرضها في بطاقات مع حالة loading وerror وبحث فوري.", example: "useEffect، useState، fetch، conditional rendering للـ loading/error" },
-  { id: 30, lang: "React", title: "نظام مصادقة بسيط", problem: "أنشئ نظام تسجيل دخول بـ React مع: نموذج login، حماية المسارات بـ React Router، وتخزين الجلسة.", example: "React Router، useContext أو useState، localStorage، ProtectedRoute component" },
-  // ── Tailwind CSS ──
-  { id: 31, lang: "Tailwind CSS", title: "صفحة هبوط Landing Page", problem: "صمم صفحة هبوط كاملة باستخدام Tailwind CSS تحتوي على: navbar، hero section، features cards، وfooter.", example: "flex، grid، responsive breakpoints (sm:، md:، lg:)، hover: utilities" },
-  { id: 32, lang: "Tailwind CSS", title: "لوحة إدارة Dashboard", problem: "صمم لوحة تحكم باستخدام Tailwind CSS تحتوي على: sidebar، header، بطاقات إحصاء، وجدول بيانات.", example: "grid-cols-4، sidebar fixed أو sticky، card components بـ shadow وrounded" },
-  { id: 33, lang: "Tailwind CSS", title: "نظام تصميم مكونات", problem: "أنشئ مكتبة مكونات باستخدام Tailwind CSS: أزرار بأنواع متعددة، badges، alerts، وmodal.", example: "variant classes (primary/secondary/danger)، @apply في CSS لإعادة الاستخدام" },
-  // ── Bootstrap ──
-  { id: 34, lang: "Bootstrap", title: "موقع شركة متجاوب", problem: "أنشئ موقع شركة متجاوب بـ Bootstrap 5 يحتوي على: navbar، carousel، cards، وcontact form.", example: "container، row، col-md-4، navbar-toggler، carousel component" },
-  { id: 35, lang: "Bootstrap", title: "نموذج تسجيل محسّن", problem: "صمم نموذج تسجيل احترافي بـ Bootstrap مع: التحقق من المدخلات، حالة invalid/valid، وأيقونات مدمجة.", example: "form-control، is-invalid، invalid-feedback، input-group، Bootstrap icons" },
-  { id: 36, lang: "Bootstrap", title: "جدول بيانات تفاعلي", problem: "أنشئ جدول بيانات بـ Bootstrap مع: ترتيب الأعمدة، بحث، pagination، وأزرار إجراءات لكل صف.", example: "table-striped، table-hover، pagination، modal لتأكيد الحذف" },
-  // ── Angular ──
-  { id: 37, lang: "Angular", title: "تطبيق قائمة مهام", problem: "أنشئ تطبيق Todo بـ Angular مع: Component، Service، Two-way Data Binding، وحذف/إضافة المهام.", example: "[(ngModel)]، *ngFor، *ngIf، @Injectable() service، EventEmitter" },
-  { id: 38, lang: "Angular", title: "نظام التوجيه Routing", problem: "أنشئ تطبيق Angular متعدد الصفحات مع: RouterModule، lazy loading، وحماية المسارات بـ Guards.", example: "RouterModule.forRoot()، canActivate Guard، routerLink، ActivatedRoute" },
-  { id: 39, lang: "Angular", title: "استهلاك REST API", problem: "استخدم HttpClientModule في Angular لاستهلاك API وعرض البيانات مع معالجة الأخطاء بـ RxJS.", example: "HttpClient، Observable، pipe(catchError())، async pipe في القالب" },
-  // ── Vue.js ──
-  { id: 40, lang: "Vue.js", title: "تطبيق قائمة مهام", problem: "أنشئ تطبيق Todo بـ Vue 3 مع Composition API: إضافة وحذف وتعليم المهام مع reactive state.", example: "ref()، computed()، v-for، v-model، @click event" },
-  { id: 41, lang: "Vue.js", title: "متجر Vuex/Pinia", problem: "استخدم Pinia لإدارة حالة تطبيق Vue يحتوي على: سلة تسوق، إضافة وحذف منتجات، وحساب الإجمالي.", example: "defineStore()، state، getters، actions، useStore() في المكونات" },
-  { id: 42, lang: "Vue.js", title: "تطبيق الطقس", problem: "أنشئ تطبيق طقس بـ Vue 3 يجلب بيانات من API وعرض درجة الحرارة والحالة مع رسوم متحركة.", example: "Axios أو fetch، v-if/v-else، transition component، async/await" },
-  // ── Laravel ──
-  { id: 43, lang: "Laravel", title: "نظام CRUD للمنتجات", problem: "أنشئ نظام CRUD كامل بـ Laravel لإدارة المنتجات: إنشاء، قراءة، تحديث، حذف مع Eloquent ORM.", example: "php artisan make:model Product -m -c\nController بـ index()، create()، store()، edit()، update()، destroy()" },
-  { id: 44, lang: "Laravel", title: "مصادقة Laravel Breeze", problem: "أضف نظام مصادقة كامل لمشروع Laravel باستخدام Laravel Breeze مع تسجيل الدخول والخروج وحماية المسارات.", example: "composer require laravel/breeze\nphp artisan breeze:install\n@auth و@guest في Blade" },
-  { id: 45, lang: "Laravel", title: "RESTful API بـ Laravel", problem: "أنشئ RESTful API بـ Laravel Sanctum للمصادقة مع API Resources لتنسيق البيانات.", example: "php artisan make:controller Api/ProductController --api\nRoute::apiResource('products', ProductController::class)" },
-  // ── PHP ──
-  { id: 46, lang: "PHP", title: "نظام تسجيل دخول", problem: "أنشئ نظام تسجيل دخول بـ PHP خام مع: قاعدة بيانات MySQL، تشفير كلمة المرور بـ password_hash، وجلسات Sessions.", example: "mysqli أو PDO، password_hash()، password_verify()، $_SESSION" },
-  { id: 47, lang: "PHP", title: "معالجة نماذج HTML", problem: "اكتب سكريبت PHP يعالج نموذج HTML: التحقق من المدخلات، sanitization، وحفظ البيانات في قاعدة بيانات.", example: "filter_var()، htmlspecialchars()، PDO prepared statements" },
-  { id: 48, lang: "PHP", title: "API JSON بـ PHP", problem: "أنشئ نقطة API بـ PHP خام تستقبل طلبات JSON وتعيد بيانات من قاعدة البيانات بصيغة JSON.", example: "header('Content-Type: application/json')، json_encode()، json_decode()، $_SERVER['REQUEST_METHOD']" },
-  // ── Node.js ──
-  { id: 49, lang: "Node.js", title: "خادم HTTP بسيط", problem: "أنشئ خادم HTTP بـ Node.js خام (بدون Express) يستجيب لمسارات مختلفة ويقرأ بيانات من ملف JSON.", example: "http.createServer()، req.url، fs.readFileSync()، res.writeHead()، res.end()" },
-  { id: 50, lang: "Node.js", title: "CLI أداة سطر الأوامر", problem: "أنشئ أداة CLI بـ Node.js تقبل وسائط من سطر الأوامر وتؤدي عمليات على الملفات (قراءة، كتابة، بحث).", example: "process.argv، fs.promises، path module، readline للتفاعل" },
-  { id: 51, lang: "Node.js", title: "نظام مراقبة الملفات", problem: "أنشئ سكريبت Node.js يراقب مجلداً ويسجل أي تغييرات (إضافة/حذف/تعديل) مع الوقت.", example: "fs.watch() أو chokidar، EventEmitter، تسجيل التغييرات في ملف log" },
-  // ── Python ──
-  { id: 52, lang: "Python", title: "تحليل البيانات CSV", problem: "اكتب سكريبت Python يقرأ ملف CSV، يحسب المتوسط والمجموع لأعمدة رقمية، ويصدر النتائج لملف جديد.", example: "import csv، with open() as f، csv.DictReader()، statistics.mean()" },
-  { id: 53, lang: "Python", title: "Web Scraper", problem: "أنشئ Web Scraper بـ Python باستخدام requests وBeautifulSoup لاستخراج عناوين المقالات وروابطها من موقع.", example: "requests.get(url)، BeautifulSoup(html, 'html.parser')، soup.find_all('a')" },
-  { id: 54, lang: "Python", title: "نظام قاعدة البيانات SQLite", problem: "أنشئ تطبيق Python لإدارة مكتبة كتب باستخدام SQLite3 مع عمليات CRUD كاملة.", example: "import sqlite3، conn.execute()، cursor.fetchall()، context manager" },
-  // ── MongoDB ──
-  { id: 55, lang: "MongoDB", title: "CRUD بـ MongoDB Shell", problem: "نفذ عمليات CRUD كاملة في MongoDB Shell لمجموعة 'products': إضافة، بحث، تحديث، حذف مع استعلامات متقدمة.", example: "db.products.insertMany([...])، find({price: {$gt: 100}})، updateOne()، deleteMany()" },
-  { id: 56, lang: "MongoDB", title: "Aggregation Pipeline", problem: "أنشئ Aggregation Pipeline لتحليل بيانات مبيعات: group بالشهر، sort، limit، وproject الحقول المطلوبة.", example: "$group، $sort، $limit، $project، $match في pipeline" },
-  { id: 57, lang: "MongoDB", title: "Mongoose Schema", problem: "أنشئ Schema بـ Mongoose لنظام مدونة يحتوي على: مقالات، تعليقات مضمنة، وعلاقة مرجعية بالمستخدمين.", example: "new Schema({})، ref: 'User'، populate()، pre-save hook للتحقق" },
-  // ── Express.js ──
-  { id: 58, lang: "Express.js", title: "RESTful API كامل", problem: "أنشئ RESTful API بـ Express.js لإدارة مهام: CRUD كامل، middleware للتحقق، وtry/catch للأخطاء.", example: "app.get/post/put/delete، express.Router()، middleware chain" },
-  { id: 59, lang: "Express.js", title: "Middleware مخصص", problem: "أنشئ middleware للتسجيل (logging)، والتحقق من الـ token، وحد معدل الطلبات (rate limiting).", example: "app.use((req, res, next) => {...})، req.headers.authorization، next()" },
-  { id: 60, lang: "Express.js", title: "رفع الملفات Multer", problem: "أنشئ نقطة نهاية لرفع الصور بـ Express وMulter مع التحقق من نوع الملف وحجمه وتخزينه.", example: "multer({ storage, fileFilter, limits })، req.file، path.extname()" },
-  // ── Next.js ──
-  { id: 61, lang: "Next.js", title: "موقع SSR مع API Routes", problem: "أنشئ موقع Next.js مع: صفحة SSR تجلب بيانات من API Route داخلي، وصفحة SSG للمحتوى الثابت.", example: "getServerSideProps()، getStaticProps()، pages/api/data.ts، useRouter()" },
-  { id: 62, lang: "Next.js", title: "مدونة بـ App Router", problem: "أنشئ مدونة بـ Next.js 14 App Router مع: layout، Server Components، Dynamic Routes، وMetadata API.", example: "app/layout.tsx، app/blog/[slug]/page.tsx، generateMetadata()، fetch() caching" },
-  { id: 63, lang: "Next.js", title: "مصادقة بـ NextAuth", problem: "أضف نظام مصادقة لمشروع Next.js باستخدام NextAuth.js مع Google Provider وحماية الصفحات.", example: "NextAuth()، SessionProvider، useSession()، withAuth middleware" },
-  // ── ASP.NET ──
-  { id: 64, lang: "ASP.NET", title: "Web API بـ C#", problem: "أنشئ Web API بـ ASP.NET Core مع Controller، Entity Framework Core، وعمليات CRUD لإدارة منتجات.", example: "[ApiController]، [HttpGet/Post/Put/Delete]، DbContext، IActionResult" },
-  { id: 65, lang: "ASP.NET", title: "مصادقة JWT", problem: "أضف JWT Authentication لـ ASP.NET Core API مع تسجيل الدخول والتسجيل وحماية نقاط النهاية.", example: "JwtBearer، AddAuthentication()، [Authorize]، ClaimsPrincipal" },
-  { id: 66, lang: "ASP.NET", title: "Razor Pages Form", problem: "أنشئ صفحة Razor Pages لنموذج تواصل مع التحقق من المدخلات بـ Data Annotations وإرسال البريد الإلكتروني.", example: "PageModel، [BindProperty]، [Required]، ModelState.IsValid، SmtpClient" },
-  // ── Django ──
-  { id: 67, lang: "Django", title: "تطبيق CRUD بـ Django", problem: "أنشئ تطبيق Django لإدارة مقالات مدونة مع: Models، Views، URLs، Templates، وDjango Admin.", example: "models.Model، views.py، urls.py، {% for %}، {% extends %}" },
-  { id: 68, lang: "Django", title: "Django REST Framework", problem: "أنشئ API بـ Django REST Framework مع Serializers، ViewSets، وRouter لإدارة بيانات.", example: "ModelSerializer، ViewSet، DefaultRouter، @action decorator" },
-  { id: 69, lang: "Django", title: "مصادقة وأذونات", problem: "أضف نظام مصادقة لـ Django مع: تسجيل المستخدمين، تسجيل الدخول/الخروج، وأذونات مخصصة.", example: "django.contrib.auth، @login_required، UserCreationForm، Permission" },
-  // ── Flask ──
-  { id: 70, lang: "Flask", title: "API REST بـ Flask", problem: "أنشئ REST API بـ Flask مع SQLAlchemy لإدارة مهام: CRUD كامل، JSON responses، وerror handlers.", example: "@app.route('/tasks', methods=['GET', 'POST'])، db.session.add()، jsonify()" },
-  { id: 71, lang: "Flask", title: "نظام مصادقة Flask-Login", problem: "أضف مصادقة لتطبيق Flask باستخدام Flask-Login مع: تسجيل المستخدمين، تشفير كلمة المرور، وحماية المسارات.", example: "LoginManager، @login_required، UserMixin، generate_password_hash()" },
-  { id: 72, lang: "Flask", title: "رفع الملفات", problem: "أنشئ نقطة نهاية Flask لرفع الصور مع: التحقق من النوع والحجم، تخزين آمن، وعرضها.", example: "request.files، secure_filename()، ALLOWED_EXTENSIONS، send_from_directory()" },
-];
-
 const TRACK_LABELS: Record<ProjectTrack, string> = {
   basics: "أساسيات البرمجة",
   frontend: "مسار Frontend",
@@ -252,6 +160,15 @@ function loadStarted(): StartedProject[] {
 
 function saveStarted(list: StartedProject[]) {
   localStorage.setItem(STARTED_PROJECTS_KEY, JSON.stringify(list));
+}
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
 }
 
 export default function ProjectsPage() {
@@ -289,6 +206,14 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const canManage = user?.role === "admin" || user?.role === "employer";
+
+  // Dynamic assignments (fetched from backend)
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(true);
+
+  // Solution file upload (for AI review)
+  const [solutionFile, setSolutionFile] = useState<File | null>(null);
+  const solutionFileRef = useRef<HTMLInputElement | null>(null);
 
   // Add project form state (admin/employer only)
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
@@ -373,13 +298,29 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
         ? activeFrontendLang
         : activeBackendLang;
 
-  const categoryAssignments = ASSIGNMENTS.filter((a) => a.lang === activeLang);
+  useEffect(() => {
+    setAssignmentsLoading(true);
+    setCurrentAssignmentIdx(0);
+    setSolution("");
+    setSolutionFile(null);
+    setReviewResult(null);
+    setReviewError(null);
+    apiFetch(`/api/assignments?language=${encodeURIComponent(activeLang)}&limit=50`)
+      .then((r) => (r.ok ? r.json() : { assignments: [] }))
+      .then((data) => setAssignments(Array.isArray(data?.assignments) ? data.assignments : []))
+      .catch(() => setAssignments([]))
+      .finally(() => setAssignmentsLoading(false));
+  }, [activeLang]);
+
+  const categoryAssignments = assignments;
   const currentAssignment = categoryAssignments[currentAssignmentIdx] ?? categoryAssignments[0];
   const filteredProjects = projects.filter((p) => p.track === activeTrack);
 
   const handleNextAssignment = () => {
+    if (categoryAssignments.length === 0) return;
     setCurrentAssignmentIdx((prev) => (prev + 1) % categoryAssignments.length);
     setSolution("");
+    setSolutionFile(null);
     setReviewResult(null);
     setReviewError(null);
   };
@@ -441,8 +382,8 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
   };
 
   const handleSubmitSolution = async () => {
-    if (!solution.trim()) {
-      setReviewError("الرجاء كتابة الحل أولاً قبل تقديمه.");
+    if (!solution.trim() && !solutionFile) {
+      setReviewError("الرجاء كتابة الحل أو رفع ملف الحل أولاً قبل تقديمه.");
       return;
     }
     if (!currentAssignment) return;
@@ -450,30 +391,55 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
     setReviewResult(null);
     setReviewError(null);
     const lang = String(activeLang);
-    const problem = currentAssignment.problem ?? "";
+    const problem = currentAssignment.question ?? "";
+    let code = solution.trim();
+    if (!code && solutionFile) {
+      try {
+        code = await readFileAsText(solutionFile);
+      } catch {
+        code = "";
+      }
+    }
     try {
       let data: ReviewResult;
       try {
         const res = await apiFetch("/api/assignments/review", {
   method: "POST",
-  body: JSON.stringify({  code: solution,
+  body: JSON.stringify({  code,
             language: lang,
             problem,
             problemTitle: currentAssignment.title,}),
 });
-      
+
         if (res.ok) {
           const json = await res.json() as ReviewResult;
-          data = (json && typeof json.score === "number") ? json : projectClientFallback(solution, lang, problem);
+          data = (json && typeof json.score === "number") ? json : projectClientFallback(code, lang, problem);
         } else {
-          data = projectClientFallback(solution, lang, problem);
+          data = projectClientFallback(code, lang, problem);
         }
       } catch {
-        data = projectClientFallback(solution, lang, problem);
+        data = projectClientFallback(code, lang, problem);
       }
       setReviewResult(data);
+
+      if (user?.id && currentAssignment.id) {
+        apiFetch("/api/assignments/submit", {
+          method: "POST",
+          body: JSON.stringify({ assignment_id: currentAssignment.id, solution: code, language: lang }),
+        }).catch(() => {});
+
+        if (data.isCorrect) {
+          setAssignments((prev) =>
+            prev.map((a) =>
+              a.id === currentAssignment.id
+                ? { ...a, completed: true, score: typeof a.score === "number" ? Math.max(a.score, data.score) : data.score }
+                : a
+            )
+          );
+        }
+      }
     } catch {
-      setReviewResult(projectClientFallback(solution, lang, problem));
+      setReviewResult(projectClientFallback(code, lang, problem));
     } finally {
       setReviewing(false);
     }
@@ -660,7 +626,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                   {categoryAssignments.map((_, i) => (
                     <button
                       key={i}
-                      onClick={() => { setCurrentAssignmentIdx(i); setSolution(""); setReviewResult(null); setReviewError(null); }}
+                      onClick={() => { setCurrentAssignmentIdx(i); setSolution(""); setSolutionFile(null); setReviewResult(null); setReviewError(null); }}
                       className={`w-3 h-3 rounded-full transition-colors ${i === currentAssignmentIdx ? "bg-indigo-600" : "bg-gray-200"}`}
                       data-testid={`dot-assignment-${i}`}
                     />
@@ -668,13 +634,44 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                 </div>
               </div>
 
-              {currentAssignment && (
+              {assignmentsLoading && (
+                <div className="p-6 flex items-center justify-center text-gray-400 gap-2">
+                  <Loader2 size={18} className="animate-spin" />
+                  <span className="text-sm">جاري تحميل التكليفات...</span>
+                </div>
+              )}
+
+              {!assignmentsLoading && categoryAssignments.length === 0 && (
+                <div className="p-6 text-center text-gray-500 text-sm">
+                  لا توجد تكليفات لهذه اللغة بعد.
+                </div>
+              )}
+
+              {!assignmentsLoading && currentAssignment && (
                 <div className="p-6">
-                  <h3 className="font-bold text-gray-800 text-base mb-3 text-right">{currentAssignment.title}</h3>
-                  <p className="text-gray-700 leading-relaxed mb-4 text-right">{currentAssignment.problem}</p>
-                  <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 whitespace-pre-line text-right border border-gray-100 mb-5">
-                    {currentAssignment.example}
+                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <h3 className="font-bold text-gray-800 text-base text-right">{currentAssignment.title}</h3>
+                    <div className="flex items-center gap-2">
+                      {currentAssignment.completed ? (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
+                          <CheckCircle size={13} /> مكتمل{typeof currentAssignment.score === "number" ? ` (${currentAssignment.score}/100)` : ""}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
+                          <Clock size={13} /> لم يتم الإنجاز
+                        </span>
+                      )}
+                      <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+                        الصعوبة: {currentAssignment.difficulty}/5
+                      </span>
+                    </div>
                   </div>
+                  <p className="text-gray-700 leading-relaxed mb-4 text-right">{currentAssignment.question}</p>
+                  {currentAssignment.requirements && (
+                    <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 whitespace-pre-line text-right border border-gray-100 mb-5">
+                      {currentAssignment.requirements}
+                    </div>
+                  )}
 
                   <p className="font-semibold text-gray-800 mb-2 text-right">الحل:</p>
                   <textarea
@@ -684,6 +681,35 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                     className="w-full h-40 border border-gray-200 rounded-xl p-3 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono"
                     data-testid="textarea-solution"
                   />
+
+                  <div className="mt-3">
+                    <p className="text-sm text-gray-600 mb-2 text-right">أو ارفع ملف الحل (اختياري)</p>
+                    <div
+                      className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-300 transition-colors"
+                      onClick={() => solutionFileRef.current?.click()}
+                    >
+                      <Upload size={20} className="mx-auto text-gray-400 mb-1" />
+                      <p className="text-sm text-gray-500">
+                        {solutionFile ? (
+                          <span className="text-indigo-600 font-semibold">✓ {solutionFile.name}</span>
+                        ) : (
+                          "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .html, .css, .java, .zip, .txt)"
+                        )}
+                      </p>
+                      <input
+                        ref={solutionFileRef}
+                        type="file"
+                        accept=".py,.js,.ts,.cpp,.c,.cs,.html,.css,.java,.zip,.txt"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setSolutionFile(file);
+                          setReviewResult(null);
+                          setReviewError(null);
+                        }}
+                      />
+                    </div>
+                  </div>
 
                   {reviewResult && (
                     <div className={`mt-4 rounded-xl border p-5 ${reviewResult.isCorrect ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
@@ -736,6 +762,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                 </div>
               )}
 
+              {!assignmentsLoading && currentAssignment && (
               <div className="flex gap-3 px-6 pb-6 flex-wrap">
                 <button
                   onClick={handleNextAssignment}
@@ -753,7 +780,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                   طلب مساعدة
                 </button>
                 <button
-  onClick={() => getProjectHint(currentAssignment?.problem ?? "")}
+  onClick={() => getProjectHint(currentAssignment?.question ?? "")}
   disabled={hintLoading}
   className="rounded-full px-4 py-2 text-sm text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50"
 >
@@ -761,7 +788,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
 </button>
 
 <button
-  onClick={() => getProjectFix(solution, String(activeLang), currentAssignment?.problem ?? "")}
+  onClick={() => getProjectFix(solution, String(activeLang), currentAssignment?.question ?? "")}
   disabled={fixLoading || !solution.trim()}
   className="rounded-full px-4 py-2 text-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
 >
@@ -798,6 +825,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                   {reviewing ? <><Loader2 size={14} className="animate-spin" /> جاري التقييم...</> : "تقديم الحل"}
                 </button>
               </div>
+              )}
             </div>
           </div>
 

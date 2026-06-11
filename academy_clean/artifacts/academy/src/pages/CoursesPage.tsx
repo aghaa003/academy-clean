@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
@@ -17,15 +17,16 @@ const LEVEL_COLORS: Record<string, { bg: string; text: string; label: string }> 
 export default function CoursesPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("الكل");
-  const [location] = useLocation();
+  const [, navigate] = useLocation();
+  const queryString = useSearch();
 
   const { data, isLoading } = useListCourses();
   const courses = data?.courses ?? [];
-  const urlCategory = new URLSearchParams(location.split("?")[1] ?? "").get("category");
+  const urlCategory = new URLSearchParams(queryString).get("category");
+  const selectedCategory = urlCategory ?? activeCategory;
 
   const filtered = courses.filter((c) => {
     const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase());
-    const selectedCategory = urlCategory ?? activeCategory;
     const matchCat = selectedCategory === "الكل" || c.category === selectedCategory;
     return matchSearch && matchCat;
   });
@@ -55,9 +56,12 @@ export default function CoursesPage() {
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
-                onClick={() => setActiveCategory(cat)}
+                onClick={() => {
+                  setActiveCategory(cat);
+                  if (urlCategory) navigate("/courses");
+                }}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                  activeCategory === cat
+                  selectedCategory === cat
                     ? "bg-indigo-600 text-white shadow"
                     : "bg-white border border-gray-200 text-gray-600 hover:border-indigo-300"
                 }`}

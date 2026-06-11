@@ -25,20 +25,23 @@ export default defineConfig({
   },
   server: {
   proxy: {
+    // Use 127.0.0.1 (not "localhost"): on Windows "localhost" resolves to IPv6
+    // ::1 first, but the PHP dev server only listens on IPv4, causing a ~200ms
+    // connection-fallback delay on every proxied request.
     "/api": {
-      target: "http://localhost:8000",
+      target: "http://127.0.0.1:8000",
       changeOrigin: true,
     },
     "/sanctum": {
-      target: "http://localhost:8000",
+      target: "http://127.0.0.1:8000",
       changeOrigin: true,
     },
     "/storage": {
-      target: "http://localhost:8000",
+      target: "http://127.0.0.1:8000",
       changeOrigin: true,
     },
     "/auth": {
-      target: "http://localhost:8000",
+      target: "http://127.0.0.1:8000",
       changeOrigin: true,
     },
   },
