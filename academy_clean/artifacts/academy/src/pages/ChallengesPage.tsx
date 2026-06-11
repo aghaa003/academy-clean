@@ -9,6 +9,7 @@ import {
   X, Loader2, XCircle, Upload, Lock, Eye, Info, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { MermaidDiagram } from "@/components/MermaidDiagram";
 
 const LANG_KEYWORDS_CLIENT: Record<string, string[]> = {
   "C": ["int", "printf", "scanf", "return", "main", "for", "while", "if", "include"],
@@ -144,6 +145,7 @@ export default function ChallengesPage() {
   const [activeFilter, setActiveFilter] = useState("الكل");
 const [hintLoading, setHintLoading] = useState(false);
 const [hintText, setHintText]       = useState<string | null>(null);
+const [hintMermaid, setHintMermaid] = useState<string | null>(null);
   const [activeChallenge, setActiveChallenge] = useState<any | null>(null);
   const [detailChallenge, setDetailChallenge] = useState<any | null>(null);
   const [solution, setSolution] = useState("");
@@ -208,6 +210,7 @@ useEffect(() => {
     setReviewResult(null);
     setReviewError(null);
     setHintText(null);
+    setHintMermaid(null);
   };
 
   const closeChallenge = () => {
@@ -329,18 +332,23 @@ const getHint = async () => {
   if (!activeChallenge || hintLoading) return;
   setHintLoading(true);
   setHintText(null);
+  setHintMermaid(null);
   try {
     const res = await apiFetch("/api/ai/helper-challenges", {
-  method: "POST",
-  body: JSON.stringify({      mode: "hint",
+      method: "POST",
+      body: JSON.stringify({
+        mode: "hint",
         challenge_id: activeChallenge.id,
         question: activeChallenge.description,
-        language: activeChallenge.category, }),
-});
-   
+        language: activeChallenge.category,
+        code: solution, // send current code so the hint targets where they went wrong
+      }),
+    });
+
     if (res.ok) {
-      const data = await res.json() as { ai_response?: string };
-      setHintText(data.ai_response ?? null);
+      const data = await res.json() as { hint?: string; mermaid?: string; ai_response?: string };
+      setHintText(data.hint ?? data.ai_response ?? null);
+      setHintMermaid(data.mermaid ?? null);
     }
   } catch { /* silent */ }
   finally { setHintLoading(false); }
@@ -815,9 +823,15 @@ const getHint = async () => {
 </div>
 
 {/* Hint display */}
-{hintText && (
-  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right leading-relaxed">
-    🔍 {hintText}
+{(hintText || hintMermaid) && (
+  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right leading-relaxed space-y-3">
+    {hintText && <p>🔍 {hintText}</p>}
+    {hintMermaid && (
+      <div className="bg-white rounded-lg border border-indigo-100 p-3">
+        <div className="text-xs text-indigo-400 mb-2 font-semibold">مخطط الحل الصحيح</div>
+        <MermaidDiagram chart={hintMermaid} />
+      </div>
+    )}
   </div>
 )}
               {/* Action buttons */}

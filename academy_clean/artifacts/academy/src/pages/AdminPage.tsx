@@ -228,6 +228,16 @@ export default function AdminPage() {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [bannedUsers, setBannedUsers] = useState<Set<string>>(new Set());
 
+  // Admin user-detail modal (profile + challenge/assignment answers & scores)
+  type AdminUserDetail = {
+    user: { id: string; name: string; username: string; email: string; role: string; points: number; bio?: string | null; country?: string | null; phone?: string | null; banned?: boolean; disabled?: boolean };
+    courses: { id: number; title: string; progress: number }[];
+    challenges: { id: number; title: string; success: boolean; score: number; submitted_code: string | null; language?: string }[];
+    assignments: { submission_id: number; id: number; title: string; solution: string | null; score: number; status: string; is_completed: boolean }[];
+  };
+  const [userDetail, setUserDetail] = useState<AdminUserDetail | null>(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
+
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsLoaded, setAssignmentsLoaded] = useState(false);
@@ -246,7 +256,7 @@ export default function AdminPage() {
   const [editAssignmentSaving, setEditAssignmentSaving] = useState(false);
   const [editAssignmentError, setEditAssignmentError] = useState("");
 
-  const { data: usersData, refetch: refetchUsers } = useListUsers();
+  const { data: usersData, refetch: refetchUsers } = useListUsers({ limit: 200 });
   const { data: coursesData, refetch: refetchCourses } = useListCourses();
   const { data: challengesData, refetch: refetchChallenges } = useListChallenges({ limit: 100 });
 
@@ -258,6 +268,18 @@ export default function AdminPage() {
   const courses = coursesData?.courses ?? [];
   const challenges = challengesData?.challenges ?? [];
   const creators = users.filter((u) => u.role === "creator" || u.role === "admin");
+
+  // Search filters for the admin management lists (client-side over loaded data).
+  const [userSearch, setUserSearch] = useState("");
+  const [courseSearch, setCourseSearch] = useState("");
+  const [challengeSearch, setChallengeSearch] = useState("");
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const matches = (q: string, ...fields: (string | null | undefined)[]) =>
+    q.trim() === "" || fields.some((f) => (f ?? "").toLowerCase().includes(q.trim().toLowerCase()));
+  const filteredUsers = users.filter((u: any) => matches(userSearch, u.name, u.username, u.email));
+  const filteredCourses = courses.filter((c: any) => matches(courseSearch, c.title, c.category));
+  const filteredChallenges = challenges.filter((c: any) => matches(challengeSearch, c.title, c.category));
+  const filteredAssignments = assignments.filter((a: any) => matches(assignmentSearch, a.title, a.language));
   const totalLessons = courses.reduce((sum, course: any) => sum + (course.totalLessons ?? 0), 0);
 
   // Auto-select the logged-in admin as the default creator when the form opens
@@ -371,16 +393,20 @@ export default function AdminPage() {
     );
   }
 
-  if (user?.role !== "admin") {
+  // Admins and employers can enter. Only admins get user-affecting powers
+  // (ban / disable / role / score / password) — gated by `isAdmin` below.
+  if (user?.role !== "admin" && user?.role !== "employer") {
     return (
       <div className="min-h-screen flex flex-col" dir="rtl">
         <Navbar />
         <div className="flex-1 flex items-center justify-center text-gray-500">
-          غير مصرح — هذه الصفحة للمسؤولين فقط.
+          غير مصرح — هذه الصفحة للمسؤولين والمشرفين فقط.
         </div>
       </div>
     );
   }
+
+  const isAdmin = user?.role === "admin";
 
   const updateLesson = (id: string, patch: Partial<LessonDraft>) => {
     setLessons((prev) => prev.map((l) => l.id === id ? { ...l, ...patch } : l));
@@ -394,10 +420,15 @@ export default function AdminPage() {
   };
 
   const handleSetRole = async (userId: string, role: "user" | "creator" | "employer" | "admin") => {
-  const res = await apiFetch(`/api/users/${userId}`, {
-  method: "PATCH",
-  body: JSON.stringify({ role }),
-});
+    const res = await apiFetch(`/api/admin/users/${userId}/role`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data?.error ?? "تعذّر تغيير الدور");
+      return;
+    }
     refetchUsers();
   };
 
@@ -688,8 +719,11 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
     if (!userId) return;
     try {
       const isBanned = bannedUsers.has(userId);
-      const endpoint = isBanned ? `/api/admin/users/${userId}/unban` : `/api/admin/users/${userId}/ban`;
-const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
+      const res = await apiFetch(`/api/admin/users/${userId}/ban`, {
+        method: "POST",
+        body: JSON.stringify({ banned: !isBanned }),
+      });
+      if (res.ok) {
         setBannedUsers((prev) => {
           const next = new Set(prev);
           if (isBanned) next.delete(userId); else next.add(userId);
@@ -697,6 +731,98 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
         });
       }
     } catch { /* silent */ }
+  };
+
+  // Admin-only: set a new score (points) for a user.
+  const handleSetScore = async (userId: string, current: number) => {
+    const input = prompt("النقاط الجديدة:", String(current));
+    if (input === null) return;
+    const points = parseInt(input, 10);
+    if (Number.isNaN(points) || points < 0) return;
+    const res = await apiFetch(`/api/admin/users/${userId}/score`, {
+      method: "POST",
+      body: JSON.stringify({ points }),
+    });
+    if (res.ok) refetchUsers();
+  };
+
+  // Admin-only: reset a user's password.
+  const handleSetPassword = async (userId: string) => {
+    const password = prompt("كلمة المرور الجديدة (8 أحرف على الأقل):");
+    if (!password) return;
+    if (password.length < 8) { alert("كلمة المرور يجب أن تكون 8 أحرف على الأقل."); return; }
+    const res = await apiFetch(`/api/admin/users/${userId}/password`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+    alert(res.ok ? "تم تحديث كلمة المرور" : "فشل تحديث كلمة المرور");
+  };
+
+  // Admin-only: disable / enable a user account.
+  const handleToggleDisable = async (userId: string, disabled: boolean) => {
+    const res = await apiFetch(`/api/admin/users/${userId}/disable`, {
+      method: "POST",
+      body: JSON.stringify({ disabled: !disabled }),
+    });
+    if (res.ok) refetchUsers();
+  };
+
+  // Admin-only: soft-delete a user (they can't log in again).
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("حذف هذا المستخدم؟ لن يتمكن من تسجيل الدخول مجدداً.")) return;
+    const res = await apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+    if (res.ok) refetchUsers();
+    else { const d = await res.json().catch(() => ({})); alert(d?.error ?? "تعذّر الحذف"); }
+  };
+
+  // Admin-only: restore a mistakenly-deleted user.
+  const handleRestoreUser = async (userId: string) => {
+    const res = await apiFetch(`/api/admin/users/${userId}/restore`, { method: "POST" });
+    if (res.ok) refetchUsers();
+  };
+
+  // Toggle active/disabled state for content (course/challenge/assignment).
+  const toggleContentActive = async (kind: "courses" | "challenges" | "assignments", id: number, after?: () => void) => {
+    const res = await apiFetch(`/api/${kind}/${id}/toggle-active`, { method: "POST" });
+    if (res.ok && after) after();
+    else if (!res.ok) alert("تعذّر تغيير الحالة (تحقق من الصلاحية)");
+  };
+
+  // Admin-only: open the full user detail (profile + challenge/assignment answers & scores).
+  const openUserDetail = async (userId: string) => {
+    setUserDetailLoading(true);
+    setUserDetail(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}`);
+      if (res.ok) setUserDetail(await res.json());
+    } catch { /* silent */ }
+    finally { setUserDetailLoading(false); }
+  };
+
+  const gradeChallenge = async (userId: string, challengeId: number, score: number) => {
+    const res = await apiFetch(`/api/admin/users/${userId}/challenges/${challengeId}/grade`, {
+      method: "POST", body: JSON.stringify({ score }),
+    });
+    if (res.ok) { openUserDetail(userId); refetchUsers(); }
+  };
+
+  const gradeAssignment = async (userId: string, submissionId: number, score: number) => {
+    const res = await apiFetch(`/api/admin/assignment-submissions/${submissionId}/grade`, {
+      method: "POST", body: JSON.stringify({ score }),
+    });
+    if (res.ok) openUserDetail(userId);
+  };
+
+  const deleteChallengeSubmissionAdmin = async (userId: string, submissionId: number) => {
+    if (!confirm("حذف هذا الحل؟")) return;
+    const res = await apiFetch(`/api/admin/challenge-submissions/${submissionId}`, { method: "DELETE" });
+    if (res.ok) openUserDetail(userId);
+  };
+
+  const deleteAssignmentSubmissionAdmin = async (userId: string, submissionId: number) => {
+    if (!confirm("حذف هذا التسليم؟")) return;
+    const res = await apiFetch(`/api/admin/assignment-submissions/${submissionId}`, { method: "DELETE" });
+    if (res.ok) openUserDetail(userId);
   };
 
   const loadAssignments = async () => {
@@ -911,10 +1037,13 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
 
           {/* Existing challenges list — edit/delete (CRUD) */}
           <div className="mt-6 border-t border-gray-100 pt-4 space-y-3">
-            {challenges.length === 0 ? (
-              <p className="text-center text-sm text-gray-400 py-4">لا توجد تحديات بعد</p>
+            <input value={challengeSearch} onChange={(e) => setChallengeSearch(e.target.value)}
+              placeholder="🔍 ابحث في التحديات بالعنوان أو التصنيف..."
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            {filteredChallenges.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-4">لا توجد تحديات</p>
             ) : (
-              challenges.map((c) => (
+              filteredChallenges.map((c) => (
                 <div key={c.id} className="rounded-2xl border border-gray-100 p-4">
                   {editingChallengeId === c.id ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -945,6 +1074,9 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                         </button>
                         <button onClick={() => handleDeleteChallenge(c.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
                           <Trash2 size={12} /> حذف
+                        </button>
+                        <button onClick={() => toggleContentActive("challenges", c.id, refetchChallenges)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-orange-200 text-orange-600 hover:bg-orange-50">
+                          {(c as any).is_active === false ? "تفعيل" : "تعطيل"}
                         </button>
                       </div>
                       <div className="text-right flex-1 min-w-0">
@@ -1006,9 +1138,11 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
         {/* Users Management */}
         {activeTab === "users" && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <span className="text-sm text-gray-500">{users.length} مستخدم</span>
-              <h3 className="font-bold text-gray-900 text-lg">جميع المستخدمين</h3>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+              <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="🔍 ابحث بالاسم أو اسم المستخدم أو البريد..."
+                className="flex-1 max-w-md border border-gray-200 rounded-xl px-4 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <h3 className="font-bold text-gray-900 text-lg shrink-0">جميع المستخدمين ({filteredUsers.length})</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1022,29 +1156,58 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {users.map((u, i) => (
-                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  {filteredUsers.map((u: any, i: number) => (
+                    <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${u.deleted_at ? "bg-red-50/40 opacity-70" : ""}`}>
                       <td className="py-3 px-4">
-                        <div className="flex gap-2 flex-wrap">
-                          {u.role !== "creator" && (
-                            <button onClick={() => handleSetRole(u.id, "creator")}
-                              className="text-xs px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 font-medium">
-                              صانع محتوى
+                        {u.deleted_at ? (
+                          isAdmin ? (
+                            <button onClick={() => handleRestoreUser(u.id)}
+                              className="text-xs px-3 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-medium">
+                              ♻️ استرجاع
                             </button>
-                          )}
-                          {u.role !== "admin" && (
-                            <button onClick={() => handleSetRole(u.id, "admin")}
-                              className="text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 font-medium">
-                              مسؤول
+                          ) : (
+                            <span className="text-xs text-red-400">محذوف</span>
+                          )
+                        ) : isAdmin ? (
+                          <div className="flex gap-2 flex-wrap">
+                            {u.role !== "creator" && (
+                              <button onClick={() => handleSetRole(u.id, "creator")}
+                                className="text-xs px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 font-medium">
+                                صانع محتوى
+                              </button>
+                            )}
+                            {u.role !== "admin" && (
+                              <button onClick={() => handleSetRole(u.id, "admin")}
+                                className="text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 font-medium">
+                                مسؤول
+                              </button>
+                            )}
+                            {u.role !== "user" && (
+                              <button onClick={() => handleSetRole(u.id, "user")}
+                                className="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium">
+                                مستخدم
+                              </button>
+                            )}
+                            <button onClick={() => handleSetScore(u.id, u.points)}
+                              className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-medium">
+                              النقاط
                             </button>
-                          )}
-                          {u.role !== "user" && (
-                            <button onClick={() => handleSetRole(u.id, "user")}
-                              className="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium">
-                              مستخدم
+                            <button onClick={() => handleSetPassword(u.id)}
+                              className="text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 font-medium">
+                              كلمة المرور
                             </button>
-                          )}
-                        </div>
+                            <button onClick={() => handleBanUser(u.id)}
+                              className="text-xs px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 font-medium">
+                              {bannedUsers.has(u.id) ? "رفع الحظر" : "حظر"}
+                            </button>
+                            <button onClick={() => handleDeleteUser(u.id)}
+                              className="text-xs px-3 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 font-medium">
+                              حذف
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">للعرض فقط</span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -1055,14 +1218,102 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                       </td>
                       <td className="py-3 px-4 text-indigo-600 font-semibold">{u.points}</td>
                       <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{u.name}</div>
-                        <div className="text-xs text-gray-400">{u.username}</div>
+                        {isAdmin ? (
+                          <button onClick={() => openUserDetail(u.id)} className="text-right hover:text-indigo-600">
+                            <div className="font-medium text-gray-900 hover:text-indigo-600 underline decoration-dotted">
+                              {u.name}{u.deleted_at && <span className="text-red-500 text-xs mr-1">(محذوف)</span>}
+                            </div>
+                            <div className="text-xs text-gray-400">{u.username}</div>
+                          </button>
+                        ) : (
+                          <>
+                            <div className="font-medium text-gray-900">{u.name}</div>
+                            <div className="text-xs text-gray-400">{u.username}</div>
+                          </>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-gray-400">{i + 1}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* User detail modal (admin-only): profile + challenge/assignment answers & scores */}
+        {isAdmin && (userDetail || userDetailLoading) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" dir="rtl"
+            onClick={() => { setUserDetail(null); }}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"
+              onClick={(e) => e.stopPropagation()}>
+              {userDetailLoading || !userDetail ? (
+                <div className="text-center text-gray-400 py-10">جاري التحميل...</div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <button onClick={() => setUserDetail(null)} className="text-gray-400 hover:text-gray-700">✕</button>
+                    <div className="text-right">
+                      <h3 className="font-bold text-gray-900 text-lg">{userDetail.user.name}</h3>
+                      <p className="text-xs text-gray-400">{userDetail.user.email} · {userDetail.user.role} · {userDetail.user.points} نقطة</p>
+                    </div>
+                  </div>
+
+                  {/* Challenges with submitted code + editable score */}
+                  <h4 className="font-bold text-gray-800 text-sm mb-2 text-right border-b pb-1">التحديات وإجاباتها</h4>
+                  {userDetail.challenges.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-right mb-4">لا توجد محاولات.</p>
+                  ) : (
+                    <div className="space-y-3 mb-5">
+                      {userDetail.challenges.map((c) => (
+                        <div key={c.id} className="border border-gray-100 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <input type="number" min={0} max={100} defaultValue={c.score}
+                                className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center"
+                                onBlur={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v) && v !== c.score) gradeChallenge(userDetail.user.id, c.id, v); }} />
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${c.success ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}>{c.success ? "ناجح" : "غير ناجح"}</span>
+                              <button onClick={() => deleteChallengeSubmissionAdmin(userDetail.user.id, (c as any).submission_id ?? c.id)}
+                                className="text-xs text-rose-500 hover:underline">حذف</button>
+                            </div>
+                            <span className="font-medium text-gray-800 text-sm">{c.title}</span>
+                          </div>
+                          {c.submitted_code && (
+                            <pre className="mt-2 bg-gray-50 border border-gray-100 rounded-lg p-2 text-xs overflow-x-auto text-left" dir="ltr">{c.submitted_code}</pre>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Assignments with solution + editable score */}
+                  <h4 className="font-bold text-gray-800 text-sm mb-2 text-right border-b pb-1">التكليفات وإجاباتها</h4>
+                  {userDetail.assignments.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-right">لا توجد تسليمات.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {userDetail.assignments.map((a) => (
+                        <div key={a.submission_id} className="border border-gray-100 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <input type="number" min={0} max={100} defaultValue={a.score}
+                                className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center"
+                                onBlur={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v) && v !== a.score) gradeAssignment(userDetail.user.id, a.submission_id, v); }} />
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${a.is_completed ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}>{a.status}</span>
+                              <button onClick={() => deleteAssignmentSubmissionAdmin(userDetail.user.id, a.submission_id)}
+                                className="text-xs text-rose-500 hover:underline">حذف</button>
+                            </div>
+                            <span className="font-medium text-gray-800 text-sm">{a.title}</span>
+                          </div>
+                          {a.solution && (
+                            <pre className="mt-2 bg-gray-50 border border-gray-100 rounded-lg p-2 text-xs overflow-x-auto text-left" dir="ltr">{a.solution}</pre>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1194,10 +1445,15 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                   className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">
                   إضافة درس
                 </button>
-                <h4 className="font-bold text-gray-900 text-right">{courses.length} كورس منشور</h4>
+                <h4 className="font-bold text-gray-900 text-right">{filteredCourses.length} كورس</h4>
+              </div>
+              <div className="px-6 pt-3">
+                <input value={courseSearch} onChange={(e) => setCourseSearch(e.target.value)}
+                  placeholder="🔍 ابحث في الكورسات بالعنوان أو التصنيف..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
               <div className="divide-y divide-gray-50">
-                {courses.map((c) => (
+                {filteredCourses.map((c) => (
                   <div key={c.id} className="px-6 py-4 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div className="flex gap-2">
@@ -1216,6 +1472,12 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                           className="text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-700 hover:bg-red-100 font-medium"
                         >
                           حذف الكورس
+                        </button>
+                        <button
+                          onClick={() => toggleContentActive("courses", c.id, refetchCourses)}
+                          className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 hover:bg-orange-100 font-medium"
+                        >
+                          {(c as any).is_active === false ? "تفعيل" : "تعطيل"}
                         </button>
                       </div>
                       <div className="text-right flex-1 mx-4">
@@ -1367,14 +1629,19 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                 <h4 className="font-bold text-gray-900 text-right">{assignments.length} تكليف</h4>
               </div>
               <div className="divide-y divide-gray-50 p-4 space-y-3">
+                {assignmentsLoaded && (
+                  <input value={assignmentSearch} onChange={(e) => setAssignmentSearch(e.target.value)}
+                    placeholder="🔍 ابحث في التكليفات بالعنوان أو اللغة..."
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                )}
                 {assignmentsLoading ? (
                   <p className="text-center text-sm text-gray-400 py-4">جاري التحميل...</p>
                 ) : !assignmentsLoaded ? (
                   <button onClick={() => void loadAssignments()} className="mx-auto block mt-2 text-xs text-indigo-500 underline">تحميل التكليفات</button>
-                ) : assignments.length === 0 ? (
-                  <p className="text-center text-sm text-gray-400 py-4">لا توجد تكليفات بعد</p>
+                ) : filteredAssignments.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-4">لا توجد تكليفات</p>
                 ) : (
-                  assignments.map((a) => (
+                  filteredAssignments.map((a) => (
                     <div key={a.id} className="rounded-2xl border border-gray-100 p-4">
                       {editingAssignmentId === a.id ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1413,6 +1680,9 @@ const res = await apiFetch(endpoint, { method: "POST" });      if (res.ok) {
                             </button>
                             <button onClick={() => handleDeleteAssignment(a.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
                               <Trash2 size={12} /> حذف
+                            </button>
+                            <button onClick={() => toggleContentActive("assignments", a.id, loadAssignments)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-orange-200 text-orange-600 hover:bg-orange-50">
+                              {a.is_active ? "تعطيل" : "تفعيل"}
                             </button>
                           </div>
                           <div className="text-right flex-1 min-w-0">

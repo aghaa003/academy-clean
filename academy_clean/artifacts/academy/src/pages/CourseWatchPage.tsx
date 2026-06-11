@@ -279,6 +279,21 @@ export default function CourseWatchPage() {
     } finally { setReplyLoading(false); }
   };
 
+  // The course creator (of this course), employers, and admins may moderate comments.
+  const courseCreatorId = (course as any)?.creatorId ?? (course as any)?.creator_id ?? (course as any)?.creator?.id;
+  const canModerateComments =
+    !!user && (user.role === "admin" || user.role === "employer" || user.id === courseCreatorId);
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (!activeLesson) return;
+    if (!confirm("حذف هذا التعليق؟")) return;
+    const res = await apiFetch(`/api/lessons/${activeLesson.id}/comments/${commentId}`, { method: "DELETE" });
+    if (res.ok) {
+      // Drop the comment and any of its replies.
+      setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+    }
+  };
+
   const completedCount = Object.values(progressMap).filter((p) => p.completed).length;
   const progress = lessons.length > 0 ? Math.round((completedCount / lessons.length) * 100) : 0;
   const curIdx = lessons.findIndex((l) => l.id === activeLessonId);
@@ -578,14 +593,24 @@ export default function CourseWatchPage() {
                           <span className="text-gray-500 text-xs">{timeAgo(c.createdAt)}</span>
                         </div>
                         <p className="text-gray-300 text-sm leading-relaxed">{c.content}</p>
-                        {user && (
-                          <button
-                            onClick={() => setReplyingTo(replyingTo === c.id ? null : c.id)}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 mt-1 transition-colors"
-                          >
-                            {replyingTo === c.id ? "إلغاء" : "رد"}
-                          </button>
-                        )}
+                        <div className="flex items-center gap-3 mt-1">
+                          {user && (
+                            <button
+                              onClick={() => setReplyingTo(replyingTo === c.id ? null : c.id)}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                            >
+                              {replyingTo === c.id ? "إلغاء" : "رد"}
+                            </button>
+                          )}
+                          {(canModerateComments || c.userId === user?.id) && (
+                            <button
+                              onClick={() => handleDeleteComment(c.id)}
+                              className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              حذف
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -601,6 +626,14 @@ export default function CourseWatchPage() {
                             <span className="text-gray-500 text-xs">{timeAgo(reply.createdAt)}</span>
                           </div>
                           <p className="text-gray-300 text-xs leading-relaxed">{reply.content}</p>
+                          {(canModerateComments || reply.userId === user?.id) && (
+                            <button
+                              onClick={() => handleDeleteComment(reply.id)}
+                              className="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
+                            >
+                              حذف
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

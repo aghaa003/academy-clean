@@ -5,7 +5,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useListCourses } from "@workspace/api-client-react";
 import {
-  BookOpen, Plus, X, Upload, FileText, Video, Trash2,
+  BookOpen, Plus, X, Upload, FileText, Video, Trash2, Pencil,
   CheckCircle, AlertCircle, Loader2, Paperclip, ShieldCheck, MessageCircle, BarChart3, ThumbsUp
 } from "lucide-react";
 import { useCreateChallenge } from "@workspace/api-client-react";
@@ -312,12 +312,12 @@ export default function CreatorPage() {
           apiFetch(`${BASE}/api/lessons/${lesson.id}/likes`, ),
           apiFetch(`${BASE}/api/lessons/${lesson.id}/comments`, ),
         ]);
-        const likes = likesRes.ok ? await likesRes.json() : { count: 0 };
+        const likes = likesRes.ok ? await likesRes.json() : { likesCount: 0 };
         const comments = commentsRes.ok ? await commentsRes.json() : [];
         return {
           lessonId: lesson.id,
           lessonTitle: lesson.title,
-          likes: Number(likes.count ?? 0),
+          likes: Number(likes.likesCount ?? likes.count ?? 0),
           comments,
         };
       }));
@@ -441,14 +441,14 @@ export default function CreatorPage() {
       const [likesCounts, commentsCounts] = await Promise.all([
         Promise.all(lessonsData.map(async (lesson: any) => {
           const res = await apiFetch(`${BASE}/api/lessons/${lesson.id}/likes`, );
-          return res.ok ? await res.json() : { count: 0 };
+          return res.ok ? await res.json() : { likesCount: 0 };
         })),
         Promise.all(lessonsData.map(async (lesson: any) => {
           const res = await apiFetch(`${BASE}/api/lessons/${lesson.id}/comments`, );
           return res.ok ? await res.json() : [];
         })),
       ]);
-      const likeCount = likesCounts.reduce((sum, item) => sum + Number(item.count ?? 0), 0);
+      const likeCount = likesCounts.reduce((sum, item) => sum + Number(item.likesCount ?? item.count ?? 0), 0);
       const commentCount = commentsCounts.reduce((sum, item) => sum + item.length, 0);
       const visitors = Number(courseData.totalEnrollments ?? 0);
       setAnalyticsByCourse((prev) => ({
@@ -491,6 +491,42 @@ export default function CreatorPage() {
     } else {
       setExpandLessonManage(courseId);
       if (!lessonsByCourse[courseId]) await loadLessonsForCourse(courseId);
+    }
+  };
+
+  // Inline edit of an existing lesson (course owner / employer / admin — enforced server-side).
+  const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
+  const [editLessonForm, setEditLessonForm] = useState<{ title: string; description: string; duration: string }>({ title: "", description: "", duration: "" });
+  const [savingLessonEdit, setSavingLessonEdit] = useState(false);
+
+  const startEditLesson = (lesson: any) => {
+    setEditingLessonId(lesson.id);
+    setEditLessonForm({ title: lesson.title ?? "", description: lesson.description ?? "", duration: lesson.duration ? String(lesson.duration) : "" });
+  };
+
+  const handleSaveLesson = async (courseId: number, lessonId: number) => {
+    setSavingLessonEdit(true);
+    try {
+      const res = await apiFetch(`${BASE}/api/courses/${courseId}/lessons/${lessonId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: editLessonForm.title,
+          description: editLessonForm.description,
+          duration: editLessonForm.duration ? Number(editLessonForm.duration) : null,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setLessonsByCourse((prev) => ({
+          ...prev,
+          [courseId]: (prev[courseId] ?? []).map((l: any) => (l.id === lessonId ? { ...l, ...updated } : l)),
+        }));
+        setEditingLessonId(null);
+      } else {
+        alert("تعذّر حفظ التعديل (تحقق من الصلاحية)");
+      }
+    } finally {
+      setSavingLessonEdit(false);
     }
   };
 
@@ -986,25 +1022,51 @@ export default function CreatorPage() {
                         {(lessonsByCourse[course.id] ?? []).map((lesson: any, idx: number) => (
                           <div
                             key={lesson.id}
-                            className="flex items-center justify-between gap-3 bg-white rounded-xl border border-gray-100 px-3 py-2.5"
+                            className="bg-white rounded-xl border border-gray-100 px-3 py-2.5"
                           >
-                            <button
-                              onClick={() => handleDeleteLesson(course.id, lesson.id)}
-                              disabled={!!deletingLesson[lesson.id]}
-                              className="shrink-0 text-red-400 hover:text-red-600 disabled:opacity-50 transition-colors p-1 rounded-lg hover:bg-red-50"
-                              title="حذف الدرس"
-                            >
-                              {deletingLesson[lesson.id]
-                                ? <Loader2 size={14} className="animate-spin" />
-                                : <Trash2 size={14} />}
-                            </button>
-                            <div className="flex-1 text-right min-w-0">
-                              <div className="text-sm font-medium text-gray-800 truncate">{lesson.title}</div>
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                درس {idx + 1}
-                                {lesson.duration ? ` · ${Math.round(lesson.duration / 60)} دقيقة` : ""}
+                            {editingLessonId === lesson.id ? (
+                              <div className="space-y-2">
+                                <input value={editLessonForm.title} onChange={(e) => setEditLessonForm((p) => ({ ...p, title: e.target.value }))}
+                                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right" placeholder="عنوان الدرس" />
+                                <textarea value={editLessonForm.description} onChange={(e) => setEditLessonForm((p) => ({ ...p, description: e.target.value }))}
+                                  rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right resize-none" placeholder="الوصف" />
+                                <input value={editLessonForm.duration} onChange={(e) => setEditLessonForm((p) => ({ ...p, duration: e.target.value }))}
+                                  type="number" min="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right" placeholder="المدة (ثوانٍ)" />
+                                <div className="flex gap-2 justify-end">
+                                  <button onClick={() => setEditingLessonId(null)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500">إلغاء</button>
+                                  <button onClick={() => handleSaveLesson(course.id, lesson.id)} disabled={savingLessonEdit}
+                                    className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white disabled:opacity-50">
+                                    {savingLessonEdit ? "جاري الحفظ..." : "حفظ"}
+                                  </button>
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex gap-1 shrink-0">
+                                  <button onClick={() => startEditLesson(lesson)}
+                                    className="text-indigo-400 hover:text-indigo-600 transition-colors p-1 rounded-lg hover:bg-indigo-50" title="تعديل الدرس">
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteLesson(course.id, lesson.id)}
+                                    disabled={!!deletingLesson[lesson.id]}
+                                    className="text-red-400 hover:text-red-600 disabled:opacity-50 transition-colors p-1 rounded-lg hover:bg-red-50"
+                                    title="حذف الدرس"
+                                  >
+                                    {deletingLesson[lesson.id]
+                                      ? <Loader2 size={14} className="animate-spin" />
+                                      : <Trash2 size={14} />}
+                                  </button>
+                                </div>
+                                <div className="flex-1 text-right min-w-0">
+                                  <div className="text-sm font-medium text-gray-800 truncate">{lesson.title}</div>
+                                  <div className="text-xs text-gray-400 mt-0.5">
+                                    درس {idx + 1}
+                                    {lesson.duration ? ` · ${Math.round(lesson.duration / 60)} دقيقة` : ""}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1019,6 +1081,12 @@ export default function CreatorPage() {
                   style={{ background: "linear-gradient(90deg,#ef4444,#f97316)" }}
                 >
                   {deleteSaving[course.id] ? "جاري الحذف..." : "حذف الكورس"}
+                </button>
+                <button
+                  onClick={async () => { const r = await apiFetch(`${BASE}/api/courses/${course.id}/toggle-active`, { method: "POST" }); if (r.ok) refetch(); }}
+                  className="mt-2 w-full rounded-full px-4 py-2 text-sm font-bold border border-orange-300 text-orange-600 hover:bg-orange-50"
+                >
+                  {(course as any).is_active === false ? "تفعيل الكورس" : "تعطيل الكورس"}
                 </button>
                 {appendCourseId === course.id && (
                   <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">

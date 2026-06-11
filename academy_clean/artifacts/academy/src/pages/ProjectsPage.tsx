@@ -5,6 +5,7 @@ import { CheckCircle, Clock, Trash2, ChevronRight, Loader2, XCircle, Star, Uploa
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
+import { MermaidDiagram } from "@/components/MermaidDiagram";
 
 const PROJ_LANG_KEYWORDS: Record<string, string[]> = {
   "C": ["int", "printf", "scanf", "return", "main", "for", "while", "if", "include"],
@@ -187,6 +188,7 @@ export default function ProjectsPage() {
   const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null);
   const [hintLoading,   setHintLoading]   = useState(false);
 const [hintText,      setHintText]       = useState<string | null>(null);
+const [hintMermaid,   setHintMermaid]    = useState<string | null>(null);
 const [fixLoading,    setFixLoading]     = useState(false);
 const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -328,15 +330,17 @@ const getProjectHint = async (problem: string) => {
   if (hintLoading) return;
   setHintLoading(true);
   setHintText(null);
+  setHintMermaid(null);
   try {
     const res = await apiFetch("/api/ai/helper-projects", {
-  method: "POST",
-  body: JSON.stringify({ mode: "hint", question: problem }),
-});
-  
+      method: "POST",
+      body: JSON.stringify({ mode: "hint", question: problem, code: solution }),
+    });
+
     if (res.ok) {
-      const data = await res.json() as { ai_response?: string };
-      setHintText(data.ai_response ?? null);
+      const data = await res.json() as { hint?: string; mermaid?: string; ai_response?: string };
+      setHintText(data.hint ?? data.ai_response ?? null);
+      setHintMermaid(data.mermaid ?? null);
     }
   } catch { /* silent */ }
   finally { setHintLoading(false); }
@@ -795,9 +799,15 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
   {fixLoading ? <Loader2 size={13} className="animate-spin inline" /> : "🔧 إصلاح الكود"}
 </button>
 
-{hintText && (
-  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right">
-    🔍 {hintText}
+{(hintText || hintMermaid) && (
+  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right space-y-3">
+    {hintText && <p>🔍 {hintText}</p>}
+    {hintMermaid && (
+      <div className="bg-white rounded-lg border border-indigo-100 p-3">
+        <div className="text-xs text-indigo-400 mb-2 font-semibold">مخطط الحل الصحيح</div>
+        <MermaidDiagram chart={hintMermaid} />
+      </div>
+    )}
   </div>
 )}
 
