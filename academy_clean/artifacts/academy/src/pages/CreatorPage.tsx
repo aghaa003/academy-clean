@@ -137,6 +137,10 @@ export default function CreatorPage() {
   const [lessonsLoading, setLessonsLoading] = useState<Record<number, boolean>>({});
   const [expandLessonManage, setExpandLessonManage] = useState<number | null>(null);
   const [deletingLesson, setDeletingLesson] = useState<Record<number, boolean>>({});
+  // Inline edit of an existing lesson (course owner / employer / admin — enforced server-side).
+  const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
+  const [editLessonForm, setEditLessonForm] = useState<{ title: string; description: string; duration: string }>({ title: "", description: "", duration: "" });
+  const [savingLessonEdit, setSavingLessonEdit] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [editCourseForm, setEditCourseForm] = useState({
     title: "", description: "", category: "", level: "beginner",
@@ -493,11 +497,6 @@ export default function CreatorPage() {
       if (!lessonsByCourse[courseId]) await loadLessonsForCourse(courseId);
     }
   };
-
-  // Inline edit of an existing lesson (course owner / employer / admin — enforced server-side).
-  const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
-  const [editLessonForm, setEditLessonForm] = useState<{ title: string; description: string; duration: string }>({ title: "", description: "", duration: "" });
-  const [savingLessonEdit, setSavingLessonEdit] = useState(false);
 
   const startEditLesson = (lesson: any) => {
     setEditingLessonId(lesson.id);

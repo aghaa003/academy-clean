@@ -7,7 +7,7 @@ import { useGetCourse } from "@workspace/api-client-react";
 import {
   Play, Lock, BookOpen, ChevronLeft, ChevronRight,
   CheckCircle, Heart, MessageSquare, Send, Pause,
-  Volume2, VolumeX, Maximize2, FileText, Paperclip
+  Volume2, VolumeX, Maximize2, FileText, Paperclip, Star
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -90,10 +90,43 @@ export default function CourseWatchPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  // Course rating state
+  const [myRating, setMyRating] = useState<number | null>(null);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [ratingSaving, setRatingSaving] = useState(false);
+  const [avgRating, setAvgRating] = useState<number>(0);
+  const [totalReviews, setTotalReviews] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeLesson = lessons.find((l) => l.id === activeLessonId) ?? lessons[0] ?? null;
+
+  // Sync the rating widget whenever the course data loads/changes.
+  useEffect(() => {
+    if (!course) return;
+    setAvgRating(Number((course as any).averageRating) || 0);
+    setTotalReviews(Number((course as any).totalReviews) || 0);
+    setMyRating((course as any).myRating ?? null);
+  }, [course]);
+
+  const submitRating = async (n: number) => {
+    if (!courseId || ratingSaving) return;
+    setRatingSaving(true);
+    try {
+      const res = await apiFetch(`/api/courses/${courseId}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({ rating: n }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyRating(n);
+        setAvgRating(Number(data.averageRating) || n);
+        setTotalReviews(Number(data.totalReviews) || totalReviews);
+      }
+    } finally {
+      setRatingSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (lessons.length > 0 && activeLessonId === null) {
@@ -428,6 +461,38 @@ export default function CourseWatchPage() {
                 {(course as any)?.creatorName && (
                   <p className="text-gray-500 text-xs mt-0.5">المدرب: {(course as any).creatorName}</p>
                 )}
+
+                {/* Course rating */}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1">
+                    <Star size={14} fill="#f59e0b" className="text-amber-400" />
+                    <span className="text-amber-300 text-sm font-bold">{avgRating.toFixed(1)}</span>
+                    <span className="text-gray-500 text-xs">({totalReviews})</span>
+                  </div>
+                  {user && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-xs">{myRating ? "تقييمك:" : "قيّم الكورس:"}</span>
+                      <div className="flex items-center" onMouseLeave={() => setHoverRating(0)}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            disabled={ratingSaving}
+                            onClick={() => submitRating(n)}
+                            onMouseEnter={() => setHoverRating(n)}
+                            className="p-0.5 disabled:opacity-50 transition-transform hover:scale-110"
+                            title={`${n} نجوم`}
+                          >
+                            <Star
+                              size={18}
+                              className={(hoverRating || myRating || 0) >= n ? "text-amber-400" : "text-gray-600"}
+                              fill={(hoverRating || myRating || 0) >= n ? "#f59e0b" : "none"}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <p className="text-gray-400 text-sm mt-1">{activeLesson?.title ?? ""}</p>
                 {activeLesson?.description && (
                   <p className="text-gray-500 text-xs mt-2 leading-relaxed">{activeLesson.description}</p>
