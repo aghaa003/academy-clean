@@ -12,6 +12,13 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "cd /d \"C:\\Users\\aghaa\\Desktop\\testlaravel - Copy - Copy\" && php artisan serve"],
       "port": 8000
+    },
+    {
+      "name": "devlink-frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\aghaa\\Desktop\\devlink-fixed-v3\\devlink && pnpm --filter @workspace/devlink run dev"],
+      "port": 5174,
+      "autoPort": true
     }
   ]
 }
