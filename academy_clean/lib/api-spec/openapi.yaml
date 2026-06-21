@@ -1403,11 +1403,17 @@ components:
           type: string
         solvedChallenges:
           type: integer
+        challengesInProgress:
+          type: integer
         totalPoints:
           type: integer
         globalRank:
           type: integer
         coursesEnrolled:
+          type: integer
+        coursesCompleted:
+          type: integer
+        videoWatchedSeconds:
           type: integer
         repositoriesCreated:
           type: integer
@@ -1421,4 +1427,4 @@ components:
               count:
                 type: integer
             required: [category, count]
-      required: [userId, solvedChallenges, totalPoints, globalRank, coursesEnrolled, repositoriesCreated, categoriesBreakdown]
+      required: [userId, solvedChallenges, challengesInProgress, totalPoints, globalRank, coursesEnrolled, coursesCompleted, videoWatchedSeconds, repositoriesCreated, categoriesBreakdown]

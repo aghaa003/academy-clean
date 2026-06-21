@@ -7,6 +7,8 @@ import {
   ExternalLink, Download, Globe,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { useCurrentUser } from "@/lib/auth-context";
+import { RepoRating } from "@/components/RepoRating";
 
 const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -47,6 +49,8 @@ interface PublicRepo {
   isPublic: boolean;
   isDraft?: boolean;
   createdAt: string;
+  averageRating?: number;
+  ratingsCount?: number;
 }
 
 const AVATAR_COLORS = ["#3730a3", "#7c3aed", "#0891b2", "#16a34a", "#e11d48", "#f59e0b"];
@@ -68,6 +72,7 @@ function techColor(t: string) {
 export default function PublicProfilePage() {
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
+  const { user: viewer } = useCurrentUser();
 
   const [profile, setProfile] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -352,6 +357,15 @@ export default function PublicProfilePage() {
                                 ))}
                               </div>
                             )}
+                            <div className="mt-3 flex justify-end">
+                              <RepoRating
+                                repositoryId={repo.id}
+                                averageRating={repo.averageRating ?? 0}
+                                ratingsCount={repo.ratingsCount ?? 0}
+                                isOwner={!!viewer && viewer.id === userId}
+                                canRate={!!viewer}
+                              />
+                            </div>
                           </div>
 
                           {/* External links: GitHub & live demo */}

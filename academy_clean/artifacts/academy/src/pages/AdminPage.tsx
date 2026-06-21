@@ -16,9 +16,11 @@ import {
 } from "lucide-react";
 import { useCreateChallenge } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Pager } from "@/components/Pager";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-type AdminTab = "overview" | "users" | "courses" | "assignments" | "challenges" | "engagement" | "activity";
+type AdminTab = "overview" | "users" | "courses" | "assignments" | "challenges" | "projects" | "examples" | "community" | "engagement" | "activity";
 
 type AssignmentItem = {
   id: number;
@@ -27,6 +29,7 @@ type AssignmentItem = {
   question: string;
   description: string | null;
   requirements: string | null;
+  help_text: string | null;
   difficulty: number;
   language: string | null;
   assignment_order: number;
@@ -224,8 +227,12 @@ export default function AdminPage() {
   const [engagementsLoading, setEngagementsLoading] = useState(false);
   const [comments, setComments] = useState<CommentModeration[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentSearch, setCommentSearch] = useState("");
+  const [userChallengeSearch, setUserChallengeSearch] = useState("");
+  const [userAssignmentSearch, setUserAssignmentSearch] = useState("");
   const [reviews, setReviews] = useState<ReviewModeration[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewSearch, setReviewSearch] = useState("");
   const [bannedUsers, setBannedUsers] = useState<Set<string>>(new Set());
 
   // Admin user-detail modal (profile + challenge/assignment answers & scores)
@@ -237,20 +244,80 @@ export default function AdminPage() {
   };
   const [userDetail, setUserDetail] = useState<AdminUserDetail | null>(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [confirmUserAction, setConfirmUserAction] = useState<{ type: "delete" | "permanent"; userId: string } | null>(null);
+  const [confirmActionLoading, setConfirmActionLoading] = useState(false);
+
+  // Generic confirm dialog for one-off destructive content actions (challenge/course/
+  // solution/submission/assignment delete) — replaces native window.confirm() popups.
+  const [genericConfirm, setGenericConfirm] = useState<{ title: string; description: string; onConfirm: () => Promise<void> | void } | null>(null);
+  const [genericConfirmLoading, setGenericConfirmLoading] = useState(false);
+  const runGenericConfirm = async () => {
+    if (!genericConfirm) return;
+    setGenericConfirmLoading(true);
+    try {
+      await genericConfirm.onConfirm();
+    } finally {
+      setGenericConfirmLoading(false);
+      setGenericConfirm(null);
+    }
+  };
+
+  // Projects tab (admin/employer CRUD for project briefs — mirrors ProjectsPage's own admin form)
+  type AdminProjectItem = { id: number; track: string; title: string; description: string | null; difficulty: number; tags: string[]; category: string | null; is_active?: boolean };
+  const [adminProjects, setAdminProjects] = useState<AdminProjectItem[]>([]);
+  const [adminProjectsLoading, setAdminProjectsLoading] = useState(false);
+  const [adminProjectsLoaded, setAdminProjectsLoaded] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [projectForm, setProjectForm] = useState({ track: "basics", title: "", description: "", difficulty: "2", tags: "", category: "" });
+  const [projectSaving, setProjectSaving] = useState(false);
+  const [projectError, setProjectError] = useState("");
+  const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
+  const [projectDeleteLoading, setProjectDeleteLoading] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [editProjectForm, setEditProjectForm] = useState({ track: "basics", title: "", description: "", difficulty: "2", tags: "", category: "" });
+  const [editProjectSaving, setEditProjectSaving] = useState(false);
+  const [editProjectError, setEditProjectError] = useState("");
+
+  // Examples tab (admin/employer CRUD for code examples — mirrors ExamplesPage's own admin form)
+  type AdminExampleItem = { id: number; title: string; description: string | null; category: string; code: string; install_command: string | null; technologies: string[] | null; is_active?: boolean };
+  const [adminExamples, setAdminExamples] = useState<AdminExampleItem[]>([]);
+  const [adminExamplesLoading, setAdminExamplesLoading] = useState(false);
+  const [adminExamplesLoaded, setAdminExamplesLoaded] = useState(false);
+  const [exampleSearch, setExampleSearch] = useState("");
+  const [showExampleForm, setShowExampleForm] = useState(false);
+  const [exampleForm, setExampleForm] = useState({ title: "", description: "", category: "Frontend", code: "", install_command: "", technologies: "" });
+  const [exampleSaving, setExampleSaving] = useState(false);
+  const [exampleError, setExampleError] = useState("");
+  const [exampleToDelete, setExampleToDelete] = useState<number | null>(null);
+  const [exampleDeleteLoading, setExampleDeleteLoading] = useState(false);
+  const [editingExampleId, setEditingExampleId] = useState<number | null>(null);
+  const [editExampleForm, setEditExampleForm] = useState({ title: "", description: "", category: "Frontend", code: "", install_command: "", technologies: "" });
+  const [editExampleSaving, setEditExampleSaving] = useState(false);
+  const [editExampleError, setEditExampleError] = useState("");
+
+  // Community posts tab (admin/employer moderation — list/delete any post)
+  type AdminCommunityPost = { id: number; title: string; body?: string; content?: string; category: string | null; authorName: string; commentsCount: number; likesCount: number };
+  const [communityPosts, setCommunityPosts] = useState<AdminCommunityPost[]>([]);
+  const [communityPostsLoading, setCommunityPostsLoading] = useState(false);
+  const [communityPostsLoaded, setCommunityPostsLoaded] = useState(false);
+  const [communitySearch, setCommunitySearch] = useState("");
+  const [communityPostToDelete, setCommunityPostToDelete] = useState<number | null>(null);
+  const [communityDeleteLoading, setCommunityDeleteLoading] = useState(false);
 
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsLoaded, setAssignmentsLoaded] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [assignmentForm, setAssignmentForm] = useState({
-    course_id: "", title: "", question: "", description: "", requirements: "",
+    course_id: "", title: "", question: "", description: "", requirements: "", help_text: "",
     difficulty: "1", language: "", points: "10", assignment_order: "1", is_active: true,
   });
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [assignmentError, setAssignmentError] = useState("");
   const [editingAssignmentId, setEditingAssignmentId] = useState<number | null>(null);
   const [editAssignmentForm, setEditAssignmentForm] = useState({
-    course_id: "", title: "", question: "", description: "", requirements: "",
+    course_id: "", title: "", question: "", description: "", requirements: "", help_text: "",
     difficulty: "1", language: "", points: "10", assignment_order: "1", is_active: true,
   });
   const [editAssignmentSaving, setEditAssignmentSaving] = useState(false);
@@ -281,6 +348,18 @@ export default function AdminPage() {
   const filteredChallenges = challenges.filter((c: any) => matches(challengeSearch, c.title, c.category));
   const filteredAssignments = assignments.filter((a: any) => matches(assignmentSearch, a.title, a.language));
   const totalLessons = courses.reduce((sum, course: any) => sum + (course.totalLessons ?? 0), 0);
+
+  // Pagination over the large admin lists — rendering all 100-200 rows at once
+  // was causing the page to hang; slice to a page at a time instead.
+  const PAGE_SIZE = 20;
+  const [usersPage, setUsersPage] = useState(1);
+  const [challengesPage, setChallengesPage] = useState(1);
+  useEffect(() => { setUsersPage(1); }, [userSearch]);
+  useEffect(() => { setChallengesPage(1); }, [challengeSearch]);
+  const usersPageCount = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const challengesPageCount = Math.max(1, Math.ceil(filteredChallenges.length / PAGE_SIZE));
+  const pagedUsers = filteredUsers.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
+  const pagedChallenges = filteredChallenges.slice((challengesPage - 1) * PAGE_SIZE, challengesPage * PAGE_SIZE);
 
   // Auto-select the logged-in admin as the default creator when the form opens
   useEffect(() => {
@@ -372,16 +451,21 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteChallenge = async (challengeId: number) => {
-    if (!window.confirm("هل تريد حذف هذا التحدي نهائياً؟")) return;
-    try {
-      const res = await apiFetch(`/api/challenges/${challengeId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("فشل حذف التحدي");
-      if (editingChallengeId === challengeId) setEditingChallengeId(null);
-      refetchChallenges();
-    } catch {
-      setChallengeError("حدث خطأ أثناء حذف التحدي");
-    }
+  const handleDeleteChallenge = (challengeId: number) => {
+    setGenericConfirm({
+      title: "حذف هذا التحدي؟",
+      description: "هل تريد حذف هذا التحدي نهائياً؟ لا يمكن التراجع عن هذا الإجراء.",
+      onConfirm: async () => {
+        try {
+          const res = await apiFetch(`/api/challenges/${challengeId}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("فشل حذف التحدي");
+          if (editingChallengeId === challengeId) setEditingChallengeId(null);
+          refetchChallenges();
+        } catch {
+          setChallengeError("حدث خطأ أثناء حذف التحدي");
+        }
+      },
+    });
   };
 
   if (!isLoaded) {
@@ -622,17 +706,20 @@ const res = await apiFetch(`/api/courses/${courseId}/lessons`, {
     }
   };
 
-  const handleDeleteCourse = async (courseId: number) => {
-    if (!window.confirm("هل تريد حذف هذا الكورس نهائياً؟")) return;
-    try {
-const res = await apiFetch(`${BASE}/api/courses/${courseId}`, {
-  method: "DELETE",
-});
-      if (!res.ok) throw new Error("delete failed");
-      refetchCourses();
-    } catch {
-      setCourseError("حدث خطأ أثناء حذف الكورس");
-    }
+  const handleDeleteCourse = (courseId: number) => {
+    setGenericConfirm({
+      title: "حذف هذا الكورس؟",
+      description: "هل تريد حذف هذا الكورس نهائياً؟ لا يمكن التراجع عن هذا الإجراء.",
+      onConfirm: async () => {
+        try {
+          const res = await apiFetch(`${BASE}/api/courses/${courseId}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("delete failed");
+          refetchCourses();
+        } catch {
+          setCourseError("حدث خطأ أثناء حذف الكورس");
+        }
+      },
+    });
   };
 
   const loadLogs = async () => {
@@ -767,12 +854,33 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
     if (res.ok) refetchUsers();
   };
 
-  // Admin-only: soft-delete a user (they can't log in again).
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("حذف هذا المستخدم؟ لن يتمكن من تسجيل الدخول مجدداً.")) return;
+  // Admin-only: soft-delete a user (they can't log in again) — confirmed via modal below.
+  const performDeleteUser = async (userId: string) => {
     const res = await apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
     if (res.ok) refetchUsers();
     else { const d = await res.json().catch(() => ({})); alert(d?.error ?? "تعذّر الحذف"); }
+  };
+
+  // Admin-only: irreversibly erase an already soft-deleted user — confirmed via modal below.
+  const performPermanentDeleteUser = async (userId: string) => {
+    const res = await apiFetch(`/api/admin/users/${userId}/permanent`, { method: "DELETE" });
+    if (res.ok) refetchUsers();
+    else { const d = await res.json().catch(() => ({})); alert(d?.error ?? "تعذّر الحذف النهائي"); }
+  };
+
+  const handleDeleteUser = (userId: string) => setConfirmUserAction({ type: "delete", userId });
+  const handlePermanentDeleteUser = (userId: string) => setConfirmUserAction({ type: "permanent", userId });
+
+  const runConfirmedUserAction = async () => {
+    if (!confirmUserAction) return;
+    setConfirmActionLoading(true);
+    try {
+      if (confirmUserAction.type === "delete") await performDeleteUser(confirmUserAction.userId);
+      else await performPermanentDeleteUser(confirmUserAction.userId);
+    } finally {
+      setConfirmActionLoading(false);
+      setConfirmUserAction(null);
+    }
   };
 
   // Admin-only: restore a mistakenly-deleted user.
@@ -781,8 +889,8 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
     if (res.ok) refetchUsers();
   };
 
-  // Toggle active/disabled state for content (course/challenge/assignment).
-  const toggleContentActive = async (kind: "courses" | "challenges" | "assignments", id: number, after?: () => void) => {
+  // Toggle active/disabled state for content (course/challenge/assignment/project).
+  const toggleContentActive = async (kind: "courses" | "challenges" | "assignments" | "projects" | "examples", id: number, after?: () => void) => {
     const res = await apiFetch(`/api/${kind}/${id}/toggle-active`, { method: "POST" });
     if (res.ok && after) after();
     else if (!res.ok) alert("تعذّر تغيير الحالة (تحقق من الصلاحية)");
@@ -813,16 +921,26 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
     if (res.ok) openUserDetail(userId);
   };
 
-  const deleteChallengeSubmissionAdmin = async (userId: string, submissionId: number) => {
-    if (!confirm("حذف هذا الحل؟")) return;
-    const res = await apiFetch(`/api/admin/challenge-submissions/${submissionId}`, { method: "DELETE" });
-    if (res.ok) openUserDetail(userId);
+  const deleteChallengeSubmissionAdmin = (userId: string, submissionId: number) => {
+    setGenericConfirm({
+      title: "حذف هذا الحل؟",
+      description: "سيتم حذف حل هذا التحدي نهائياً.",
+      onConfirm: async () => {
+        const res = await apiFetch(`/api/admin/challenge-submissions/${submissionId}`, { method: "DELETE" });
+        if (res.ok) openUserDetail(userId);
+      },
+    });
   };
 
-  const deleteAssignmentSubmissionAdmin = async (userId: string, submissionId: number) => {
-    if (!confirm("حذف هذا التسليم؟")) return;
-    const res = await apiFetch(`/api/admin/assignment-submissions/${submissionId}`, { method: "DELETE" });
-    if (res.ok) openUserDetail(userId);
+  const deleteAssignmentSubmissionAdmin = (userId: string, submissionId: number) => {
+    setGenericConfirm({
+      title: "حذف هذا التسليم؟",
+      description: "سيتم حذف تسليم هذا التكليف نهائياً.",
+      onConfirm: async () => {
+        const res = await apiFetch(`/api/admin/assignment-submissions/${submissionId}`, { method: "DELETE" });
+        if (res.ok) openUserDetail(userId);
+      },
+    });
   };
 
   const loadAssignments = async () => {
@@ -852,6 +970,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
           question: assignmentForm.question,
           description: assignmentForm.description || null,
           requirements: assignmentForm.requirements || null,
+          help_text: assignmentForm.help_text || null,
           difficulty: Number(assignmentForm.difficulty),
           language: assignmentForm.language || null,
           assignment_order: Number(assignmentForm.assignment_order) || 1,
@@ -867,7 +986,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
       setAssignments((prev) => [created, ...prev]);
       setShowAssignmentForm(false);
       setAssignmentForm({
-        course_id: "", title: "", question: "", description: "", requirements: "",
+        course_id: "", title: "", question: "", description: "", requirements: "", help_text: "",
         difficulty: "1", language: "", points: "10", assignment_order: "1", is_active: true,
       });
     } catch (e: any) {
@@ -885,6 +1004,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
       question: a.question,
       description: a.description ?? "",
       requirements: a.requirements ?? "",
+      help_text: a.help_text ?? "",
       difficulty: String(a.difficulty ?? 1),
       language: a.language ?? "",
       points: String(a.points ?? 0),
@@ -907,6 +1027,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
           question: editAssignmentForm.question,
           description: editAssignmentForm.description || null,
           requirements: editAssignmentForm.requirements || null,
+          help_text: editAssignmentForm.help_text || null,
           difficulty: Number(editAssignmentForm.difficulty),
           language: editAssignmentForm.language || null,
           assignment_order: Number(editAssignmentForm.assignment_order) || 1,
@@ -928,12 +1049,248 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
     }
   };
 
-  const handleDeleteAssignment = async (id: number) => {
-    if (!window.confirm("هل أنت متأكد من حذف هذا التكليف؟")) return;
+  const handleDeleteAssignment = (id: number) => {
+    setGenericConfirm({
+      title: "حذف هذا التكليف؟",
+      description: "هل أنت متأكد من حذف هذا التكليف؟ لا يمكن التراجع عن هذا الإجراء.",
+      onConfirm: async () => {
+        try {
+          const res = await apiFetch(`/api/assignments/${id}`, { method: "DELETE" });
+          if (res.ok) setAssignments((prev) => prev.filter((a) => a.id !== id));
+        } catch { /* silent */ }
+      },
+    });
+  };
+
+  // ── Projects tab ─────────────────────────────────────────────────────────
+  const loadAdminProjects = async () => {
+    setAdminProjectsLoading(true);
     try {
-      const res = await apiFetch(`/api/assignments/${id}`, { method: "DELETE" });
-      if (res.ok) setAssignments((prev) => prev.filter((a) => a.id !== id));
-    } catch { /* silent */ }
+      const res = await apiFetch("/api/projects?include_inactive=1");
+      const data = res.ok ? await res.json() : { projects: [] };
+      setAdminProjects(Array.isArray(data?.projects) ? data.projects : []);
+    } catch {
+      setAdminProjects([]);
+    } finally {
+      setAdminProjectsLoading(false);
+      setAdminProjectsLoaded(true);
+    }
+  };
+
+  const filteredAdminProjects = adminProjects.filter((p) => matches(projectSearch, p.title, p.category));
+
+  const handleCreateProject = async () => {
+    if (!projectForm.title.trim() || projectSaving) return;
+    setProjectSaving(true);
+    setProjectError("");
+    try {
+      const res = await apiFetch("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          track: projectForm.track,
+          title: projectForm.title.trim(),
+          description: projectForm.description.trim() || null,
+          difficulty: Number(projectForm.difficulty) || 1,
+          tags: projectForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+          category: projectForm.category.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? "فشل إنشاء المشروع");
+      }
+      setProjectForm({ track: "basics", title: "", description: "", difficulty: "2", tags: "", category: "" });
+      setShowProjectForm(false);
+      loadAdminProjects();
+    } catch (e: any) {
+      setProjectError(e?.message ?? "فشل إنشاء المشروع");
+    } finally {
+      setProjectSaving(false);
+    }
+  };
+
+  const handleDeleteProject = (id: number) => setProjectToDelete(id);
+
+  const confirmDeleteProject = async () => {
+    if (projectToDelete == null) return;
+    setProjectDeleteLoading(true);
+    try {
+      const res = await apiFetch(`/api/projects/${projectToDelete}`, { method: "DELETE" });
+      if (res.ok) setAdminProjects((prev) => prev.filter((p) => p.id !== projectToDelete));
+    } finally {
+      setProjectDeleteLoading(false);
+      setProjectToDelete(null);
+    }
+  };
+
+  const startEditProject = (p: AdminProjectItem) => {
+    setEditingProjectId(p.id);
+    setEditProjectForm({
+      track: p.track, title: p.title, description: p.description ?? "",
+      difficulty: String(p.difficulty ?? 2), tags: (p.tags ?? []).join(", "), category: p.category ?? "",
+    });
+    setEditProjectError("");
+  };
+
+  const handleUpdateProject = async () => {
+    if (editingProjectId == null) return;
+    setEditProjectSaving(true);
+    setEditProjectError("");
+    try {
+      const res = await apiFetch(`/api/projects/${editingProjectId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          track: editProjectForm.track,
+          title: editProjectForm.title,
+          desc: editProjectForm.description || null,
+          difficulty: Number(editProjectForm.difficulty) || 1,
+          tags: editProjectForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+          category: editProjectForm.category || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? "فشل تحديث المشروع");
+      }
+      const updated = await res.json() as AdminProjectItem;
+      setAdminProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setEditingProjectId(null);
+    } catch (e: any) {
+      setEditProjectError(e?.message ?? "فشل تحديث المشروع");
+    } finally {
+      setEditProjectSaving(false);
+    }
+  };
+
+  // ── Examples tab ─────────────────────────────────────────────────────────
+  const loadAdminExamples = async () => {
+    setAdminExamplesLoading(true);
+    try {
+      const res = await apiFetch("/api/examples?include_inactive=1");
+      const data = res.ok ? await res.json() : { examples: [] };
+      setAdminExamples(Array.isArray(data?.examples) ? data.examples : []);
+    } catch {
+      setAdminExamples([]);
+    } finally {
+      setAdminExamplesLoading(false);
+      setAdminExamplesLoaded(true);
+    }
+  };
+
+  const filteredAdminExamples = adminExamples.filter((e) => matches(exampleSearch, e.title, e.category));
+
+  const handleCreateExample = async () => {
+    if (!exampleForm.title.trim() || !exampleForm.code.trim() || exampleSaving) return;
+    setExampleSaving(true);
+    setExampleError("");
+    try {
+      const res = await apiFetch("/api/examples", {
+        method: "POST",
+        body: JSON.stringify({
+          title: exampleForm.title.trim(),
+          description: exampleForm.description.trim() || null,
+          category: exampleForm.category,
+          code: exampleForm.code,
+          install_command: exampleForm.install_command.trim() || null,
+          technologies: exampleForm.technologies.split(",").map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? "فشل إنشاء المثال");
+      }
+      setExampleForm({ title: "", description: "", category: "Frontend", code: "", install_command: "", technologies: "" });
+      setShowExampleForm(false);
+      loadAdminExamples();
+    } catch (e: any) {
+      setExampleError(e?.message ?? "فشل إنشاء المثال");
+    } finally {
+      setExampleSaving(false);
+    }
+  };
+
+  const handleDeleteExample = (id: number) => setExampleToDelete(id);
+
+  const confirmDeleteExample = async () => {
+    if (exampleToDelete == null) return;
+    setExampleDeleteLoading(true);
+    try {
+      const res = await apiFetch(`/api/examples/${exampleToDelete}`, { method: "DELETE" });
+      if (res.ok) setAdminExamples((prev) => prev.filter((e) => e.id !== exampleToDelete));
+    } finally {
+      setExampleDeleteLoading(false);
+      setExampleToDelete(null);
+    }
+  };
+
+  const startEditExample = (ex: AdminExampleItem) => {
+    setEditingExampleId(ex.id);
+    setEditExampleForm({
+      title: ex.title, description: ex.description ?? "", category: ex.category,
+      code: ex.code, install_command: ex.install_command ?? "", technologies: (ex.technologies ?? []).join(", "),
+    });
+    setEditExampleError("");
+  };
+
+  const handleUpdateExample = async () => {
+    if (editingExampleId == null) return;
+    setEditExampleSaving(true);
+    setEditExampleError("");
+    try {
+      const res = await apiFetch(`/api/examples/${editingExampleId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: editExampleForm.title,
+          description: editExampleForm.description || null,
+          category: editExampleForm.category,
+          code: editExampleForm.code,
+          install_command: editExampleForm.install_command || null,
+          technologies: editExampleForm.technologies.split(",").map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? "فشل تحديث المثال");
+      }
+      const updated = await res.json() as AdminExampleItem;
+      setAdminExamples((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+      setEditingExampleId(null);
+    } catch (e: any) {
+      setEditExampleError(e?.message ?? "فشل تحديث المثال");
+    } finally {
+      setEditExampleSaving(false);
+    }
+  };
+
+  // ── Community posts tab ─────────────────────────────────────────────────
+  const loadCommunityPosts = async () => {
+    setCommunityPostsLoading(true);
+    try {
+      const res = await apiFetch("/api/admin/community-posts?limit=200");
+      const data = res.ok ? await res.json() : [];
+      setCommunityPosts(Array.isArray(data) ? data : []);
+    } catch {
+      setCommunityPosts([]);
+    } finally {
+      setCommunityPostsLoading(false);
+      setCommunityPostsLoaded(true);
+    }
+  };
+
+  const filteredCommunityPosts = communityPosts.filter((p) => matches(communitySearch, p.title, p.authorName, p.body, p.content));
+
+  const handleDeleteCommunityPost = (id: number) => setCommunityPostToDelete(id);
+
+  const confirmDeleteCommunityPost = async () => {
+    if (communityPostToDelete == null) return;
+    setCommunityDeleteLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/community-posts/${communityPostToDelete}`, { method: "DELETE" });
+      if (res.ok) setCommunityPosts((prev) => prev.filter((p) => p.id !== communityPostToDelete));
+    } finally {
+      setCommunityDeleteLoading(false);
+      setCommunityPostToDelete(null);
+    }
   };
 
   const TABS: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
@@ -942,6 +1299,9 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
     { key: "courses", label: "إدارة الكورسات", icon: <BookOpen size={16} /> },
     { key: "assignments", label: "التكليفات", icon: <FileText size={16} /> },
     { key: "challenges", label: "إدارة التحديات البرمجية", icon: <Trophy size={16} /> },
+    { key: "projects", label: "إدارة المشاريع", icon: <FileText size={16} /> },
+    { key: "examples", label: "إدارة الأمثلة", icon: <BookOpen size={16} /> },
+    { key: "community", label: "منشورات المجتمع", icon: <MessageCircle size={16} /> },
     { key: "engagement", label: "Likes & Comments", icon: <MessageCircle size={16} /> },
     { key: "activity", label: "سجل النشاط", icon: <Activity size={16} /> },
   ];
@@ -1043,7 +1403,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
             {filteredChallenges.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-4">لا توجد تحديات</p>
             ) : (
-              filteredChallenges.map((c) => (
+              pagedChallenges.map((c) => (
                 <div key={c.id} className="rounded-2xl border border-gray-100 p-4">
                   {editingChallengeId === c.id ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1069,12 +1429,18 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex gap-2 shrink-0">
-                        <button onClick={() => startEditChallenge(c)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
-                          <Pencil size={12} /> تعديل
-                        </button>
-                        <button onClick={() => handleDeleteChallenge(c.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
-                          <Trash2 size={12} /> حذف
-                        </button>
+                        {/* Edit/delete: owner, admin, or employer (employers have the same
+                            full access as admins for challenges — see ChallengePolicy::before). */}
+                        {(isAdmin || user?.role === "employer" || (c as any).creator_id === user?.id) && (
+                          <>
+                            <button onClick={() => startEditChallenge(c)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
+                              <Pencil size={12} /> تعديل
+                            </button>
+                            <button onClick={() => handleDeleteChallenge(c.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
+                              <Trash2 size={12} /> حذف
+                            </button>
+                          </>
+                        )}
                         <button onClick={() => toggleContentActive("challenges", c.id, refetchChallenges)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-orange-200 text-orange-600 hover:bg-orange-50">
                           {(c as any).is_active === false ? "تفعيل" : "تعطيل"}
                         </button>
@@ -1091,6 +1457,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 </div>
               ))
             )}
+            <Pager page={challengesPage} pageCount={challengesPageCount} onChange={setChallengesPage} />
           </div>
         </div>
         )}
@@ -1156,15 +1523,21 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {filteredUsers.map((u: any, i: number) => (
+                  {pagedUsers.map((u: any, i: number) => (
                     <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${u.deleted_at ? "bg-red-50/40 opacity-70" : ""}`}>
                       <td className="py-3 px-4">
                         {u.deleted_at ? (
                           isAdmin ? (
-                            <button onClick={() => handleRestoreUser(u.id)}
-                              className="text-xs px-3 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-medium">
-                              ♻️ استرجاع
-                            </button>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleRestoreUser(u.id)}
+                                className="text-xs px-3 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-medium">
+                                ♻️ استرجاع
+                              </button>
+                              <button onClick={() => handlePermanentDeleteUser(u.id)}
+                                className="text-xs px-3 py-1.5 rounded-full bg-red-900 text-white hover:bg-red-950 font-medium">
+                                حذف نهائي
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-xs text-red-400">محذوف</span>
                           )
@@ -1174,6 +1547,12 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                               <button onClick={() => handleSetRole(u.id, "creator")}
                                 className="text-xs px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 font-medium">
                                 صانع محتوى
+                              </button>
+                            )}
+                            {u.role !== "employer" && (
+                              <button onClick={() => handleSetRole(u.id, "employer")}
+                                className="text-xs px-3 py-1.5 rounded-full bg-teal-50 text-teal-600 hover:bg-teal-100 font-medium">
+                                صاحب عمل
                               </button>
                             )}
                             {u.role !== "admin" && (
@@ -1238,6 +1617,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 </tbody>
               </table>
             </div>
+            <Pager page={usersPage} pageCount={usersPageCount} onChange={setUsersPage} />
           </div>
         )}
 
@@ -1265,7 +1645,10 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                     <p className="text-xs text-gray-400 text-right mb-4">لا توجد محاولات.</p>
                   ) : (
                     <div className="space-y-3 mb-5">
-                      {userDetail.challenges.map((c) => (
+                      <input value={userChallengeSearch} onChange={(e) => setUserChallengeSearch(e.target.value)}
+                        placeholder="🔍 ابحث في عنوان التحدي..."
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      {userDetail.challenges.filter((c) => matches(userChallengeSearch, c.title)).map((c) => (
                         <div key={c.id} className="border border-gray-100 rounded-xl p-3">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -1292,7 +1675,10 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                     <p className="text-xs text-gray-400 text-right">لا توجد تسليمات.</p>
                   ) : (
                     <div className="space-y-3">
-                      {userDetail.assignments.map((a) => (
+                      <input value={userAssignmentSearch} onChange={(e) => setUserAssignmentSearch(e.target.value)}
+                        placeholder="🔍 ابحث في عنوان التكليف..."
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      {userDetail.assignments.filter((a) => matches(userAssignmentSearch, a.title)).map((a) => (
                         <div key={a.submission_id} className="border border-gray-100 rounded-xl p-3">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -1467,12 +1853,15 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                         >
                           استكمال الكورس
                         </button>
-                        <button
-                          onClick={() => handleDeleteCourse(c.id)}
-                          className="text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-700 hover:bg-red-100 font-medium"
-                        >
-                          حذف الكورس
-                        </button>
+                        {/* Delete is owner-or-admin only (CoursePolicy::delete has no employer carve-out). */}
+                        {(isAdmin || (c as any).creatorId === user?.id) && (
+                          <button
+                            onClick={() => handleDeleteCourse(c.id)}
+                            className="text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-700 hover:bg-red-100 font-medium"
+                          >
+                            حذف الكورس
+                          </button>
+                        )}
                         <button
                           onClick={() => toggleContentActive("courses", c.id, refetchCourses)}
                           className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 hover:bg-orange-100 font-medium"
@@ -1604,6 +1993,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 <textarea value={assignmentForm.question} onChange={(e) => setAssignmentForm((p) => ({ ...p, question: e.target.value }))} rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="نص السؤال / المطلوب من المتدرب" />
                 <textarea value={assignmentForm.description} onChange={(e) => setAssignmentForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="وصف إضافي (اختياري)" />
                 <textarea value={assignmentForm.requirements} onChange={(e) => setAssignmentForm((p) => ({ ...p, requirements: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="المتطلبات (اختياري)" />
+                <textarea value={assignmentForm.help_text} onChange={(e) => setAssignmentForm((p) => ({ ...p, help_text: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="نص المساعدة الذي سيظهر للطالب عند الضغط على «طلب مساعدة» (اختياري)" />
                 <select value={assignmentForm.difficulty} onChange={(e) => setAssignmentForm((p) => ({ ...p, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right bg-white">
                   {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>مستوى الصعوبة: {d}</option>)}
                 </select>
@@ -1652,6 +2042,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                           <textarea value={editAssignmentForm.question} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, question: e.target.value }))} rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="نص السؤال" />
                           <textarea value={editAssignmentForm.description} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="وصف إضافي" />
                           <textarea value={editAssignmentForm.requirements} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, requirements: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="المتطلبات" />
+                          <textarea value={editAssignmentForm.help_text} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, help_text: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="نص المساعدة (يظهر للطالب عند طلب المساعدة)" />
                           <select value={editAssignmentForm.difficulty} onChange={(e) => setEditAssignmentForm((p) => ({ ...p, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
                             {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>مستوى الصعوبة: {d}</option>)}
                           </select>
@@ -1702,6 +2093,253 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
           </div>
         )}
 
+        {activeTab === "projects" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <button onClick={() => { setShowProjectForm((p) => !p); setProjectError(""); }}
+                className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                {showProjectForm ? <X size={16} /> : <Plus size={16} />}
+                {showProjectForm ? "إلغاء" : "إضافة مشروع جديد"}
+              </button>
+              <h3 className="font-bold text-gray-900 text-lg">إدارة المشاريع</h3>
+            </div>
+
+            {showProjectForm && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input value={projectForm.title} onChange={(e) => setProjectForm((p) => ({ ...p, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="عنوان المشروع" />
+                <select value={projectForm.track} onChange={(e) => setProjectForm((p) => ({ ...p, track: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right bg-white">
+                  <option value="basics">أساسيات</option>
+                  <option value="frontend">واجهات أمامية</option>
+                  <option value="backend">واجهات خلفية</option>
+                </select>
+                <textarea value={projectForm.description} onChange={(e) => setProjectForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="وصف المشروع" />
+                <input value={projectForm.category} onChange={(e) => setProjectForm((p) => ({ ...p, category: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="التصنيف (اختياري)" />
+                <input value={projectForm.tags} onChange={(e) => setProjectForm((p) => ({ ...p, tags: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="الوسوم (مفصولة بفواصل)" />
+                <select value={projectForm.difficulty} onChange={(e) => setProjectForm((p) => ({ ...p, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right bg-white">
+                  {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>مستوى الصعوبة: {d}</option>)}
+                </select>
+                {projectError && <div className="md:col-span-2 text-sm text-red-600">{projectError}</div>}
+                <div className="md:col-span-2 flex justify-end">
+                  <button onClick={handleCreateProject} disabled={!projectForm.title.trim() || projectSaving} className="rounded-full px-8 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                    {projectSaving ? "جاري الحفظ..." : "حفظ المشروع"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <button onClick={() => void loadAdminProjects()} className="text-sm font-semibold text-indigo-600">تحديث</button>
+                <h4 className="font-bold text-gray-900 text-right">{adminProjects.length} مشروع</h4>
+              </div>
+              <div className="divide-y divide-gray-50 p-4 space-y-3">
+                {adminProjectsLoaded && (
+                  <input value={projectSearch} onChange={(e) => setProjectSearch(e.target.value)}
+                    placeholder="🔍 ابحث في المشاريع بالعنوان أو التصنيف..."
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                )}
+                {adminProjectsLoading ? (
+                  <p className="text-center text-sm text-gray-400 py-4">جاري التحميل...</p>
+                ) : !adminProjectsLoaded ? (
+                  <button onClick={() => void loadAdminProjects()} className="mx-auto block mt-2 text-xs text-indigo-500 underline">تحميل المشاريع</button>
+                ) : filteredAdminProjects.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-4">لا توجد مشاريع</p>
+                ) : (
+                  filteredAdminProjects.map((p) => (
+                    <div key={p.id} className="rounded-2xl border border-gray-100 p-4">
+                      {editingProjectId === p.id ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input value={editProjectForm.title} onChange={(e) => setEditProjectForm((f) => ({ ...f, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="عنوان المشروع" />
+                          <select value={editProjectForm.track} onChange={(e) => setEditProjectForm((f) => ({ ...f, track: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
+                            <option value="basics">أساسيات</option>
+                            <option value="frontend">واجهات أمامية</option>
+                            <option value="backend">واجهات خلفية</option>
+                          </select>
+                          <textarea value={editProjectForm.description} onChange={(e) => setEditProjectForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="وصف المشروع" />
+                          <input value={editProjectForm.category} onChange={(e) => setEditProjectForm((f) => ({ ...f, category: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="التصنيف" />
+                          <input value={editProjectForm.tags} onChange={(e) => setEditProjectForm((f) => ({ ...f, tags: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="الوسوم (مفصولة بفواصل)" />
+                          <select value={editProjectForm.difficulty} onChange={(e) => setEditProjectForm((f) => ({ ...f, difficulty: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
+                            {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>مستوى الصعوبة: {d}</option>)}
+                          </select>
+                          {editProjectError && <div className="md:col-span-2 text-sm text-red-600">{editProjectError}</div>}
+                          <div className="md:col-span-2 flex justify-end gap-2">
+                            <button onClick={() => setEditingProjectId(null)} className="rounded-full px-5 py-2 text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">إلغاء</button>
+                            <button onClick={handleUpdateProject} disabled={editProjectSaving} className="rounded-full px-6 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                              {editProjectSaving ? "جاري الحفظ..." : "حفظ التعديلات"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => startEditProject(p)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
+                              <Pencil size={12} /> تعديل
+                            </button>
+                            <button onClick={() => handleDeleteProject(p.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
+                              <Trash2 size={12} /> حذف
+                            </button>
+                            <button onClick={() => toggleContentActive("projects", p.id, loadAdminProjects)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-orange-200 text-orange-600 hover:bg-orange-50">
+                              {p.is_active === false ? "تفعيل" : "تعطيل"}
+                            </button>
+                          </div>
+                          <div className="text-right flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 text-sm">
+                              {p.title}
+                              {p.is_active === false && <span className="text-xs text-orange-500 mr-1"> (معطّل)</span>}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {p.category ?? p.track} · مستوى {p.difficulty}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "examples" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <button onClick={() => { setShowExampleForm((p) => !p); setExampleError(""); }}
+                className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                {showExampleForm ? <X size={16} /> : <Plus size={16} />}
+                {showExampleForm ? "إلغاء" : "إضافة مثال جديد"}
+              </button>
+              <h3 className="font-bold text-gray-900 text-lg">إدارة الأمثلة</h3>
+            </div>
+
+            {showExampleForm && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input value={exampleForm.title} onChange={(e) => setExampleForm((p) => ({ ...p, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="عنوان المثال" />
+                <select value={exampleForm.category} onChange={(e) => setExampleForm((p) => ({ ...p, category: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right bg-white">
+                  {["Frontend", "Backend", "تطبيقات الجوال", "الخوارزميات"].map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+                <textarea value={exampleForm.description} onChange={(e) => setExampleForm((p) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right md:col-span-2 resize-none" placeholder="وصف مختصر للمثال" />
+                <textarea value={exampleForm.code} onChange={(e) => setExampleForm((p) => ({ ...p, code: e.target.value }))} rows={6} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono text-left md:col-span-2 resize-none" placeholder="الكود البرمجي" dir="ltr" />
+                <input value={exampleForm.install_command} onChange={(e) => setExampleForm((p) => ({ ...p, install_command: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left" placeholder="أمر التثبيت (اختياري)" dir="ltr" />
+                <input value={exampleForm.technologies} onChange={(e) => setExampleForm((p) => ({ ...p, technologies: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right" placeholder="التقنيات (مفصولة بفواصل)" />
+                {exampleError && <div className="md:col-span-2 text-sm text-red-600">{exampleError}</div>}
+                <div className="md:col-span-2 flex justify-end">
+                  <button onClick={handleCreateExample} disabled={!exampleForm.title.trim() || !exampleForm.code.trim() || exampleSaving} className="rounded-full px-8 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                    {exampleSaving ? "جاري الحفظ..." : "حفظ المثال"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <button onClick={() => void loadAdminExamples()} className="text-sm font-semibold text-indigo-600">تحديث</button>
+                <h4 className="font-bold text-gray-900 text-right">{adminExamples.length} مثال</h4>
+              </div>
+              <div className="divide-y divide-gray-50 p-4 space-y-3">
+                {adminExamplesLoaded && (
+                  <input value={exampleSearch} onChange={(e) => setExampleSearch(e.target.value)}
+                    placeholder="🔍 ابحث في الأمثلة بالعنوان أو التصنيف..."
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                )}
+                {adminExamplesLoading ? (
+                  <p className="text-center text-sm text-gray-400 py-4">جاري التحميل...</p>
+                ) : !adminExamplesLoaded ? (
+                  <button onClick={() => void loadAdminExamples()} className="mx-auto block mt-2 text-xs text-indigo-500 underline">تحميل الأمثلة</button>
+                ) : filteredAdminExamples.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-4">لا توجد أمثلة</p>
+                ) : (
+                  filteredAdminExamples.map((ex) => (
+                    <div key={ex.id} className="rounded-2xl border border-gray-100 p-4">
+                      {editingExampleId === ex.id ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input value={editExampleForm.title} onChange={(e) => setEditExampleForm((f) => ({ ...f, title: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="عنوان المثال" />
+                          <select value={editExampleForm.category} onChange={(e) => setEditExampleForm((f) => ({ ...f, category: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right bg-white">
+                            {["Frontend", "Backend", "تطبيقات الجوال", "الخوارزميات"].map((f) => <option key={f} value={f}>{f}</option>)}
+                          </select>
+                          <textarea value={editExampleForm.description} onChange={(e) => setEditExampleForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right md:col-span-2 resize-none" placeholder="وصف مختصر" />
+                          <textarea value={editExampleForm.code} onChange={(e) => setEditExampleForm((f) => ({ ...f, code: e.target.value }))} rows={6} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono text-left md:col-span-2 resize-none" placeholder="الكود البرمجي" dir="ltr" />
+                          <input value={editExampleForm.install_command} onChange={(e) => setEditExampleForm((f) => ({ ...f, install_command: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-left" placeholder="أمر التثبيت" dir="ltr" />
+                          <input value={editExampleForm.technologies} onChange={(e) => setEditExampleForm((f) => ({ ...f, technologies: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right" placeholder="التقنيات (مفصولة بفواصل)" />
+                          {editExampleError && <div className="md:col-span-2 text-sm text-red-600">{editExampleError}</div>}
+                          <div className="md:col-span-2 flex justify-end gap-2">
+                            <button onClick={() => setEditingExampleId(null)} className="rounded-full px-5 py-2 text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">إلغاء</button>
+                            <button onClick={handleUpdateExample} disabled={editExampleSaving} className="rounded-full px-6 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}>
+                              {editExampleSaving ? "جاري الحفظ..." : "حفظ التعديلات"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => startEditExample(ex)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
+                              <Pencil size={12} /> تعديل
+                            </button>
+                            <button onClick={() => handleDeleteExample(ex.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
+                              <Trash2 size={12} /> حذف
+                            </button>
+                            <button onClick={() => toggleContentActive("examples", ex.id, loadAdminExamples)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-orange-200 text-orange-600 hover:bg-orange-50">
+                              {ex.is_active === false ? "تفعيل" : "تعطيل"}
+                            </button>
+                          </div>
+                          <div className="text-right flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 text-sm">{ex.title}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {ex.category}
+                              {ex.is_active === false && <span className="text-xs text-orange-500 mr-1"> (معطّل)</span>}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "community" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <button onClick={() => void loadCommunityPosts()} className="text-sm font-semibold text-indigo-600">تحديث</button>
+                <h3 className="font-bold text-gray-900 text-lg">منشورات المجتمع</h3>
+              </div>
+              <div className="divide-y divide-gray-50 p-4 space-y-3">
+                {communityPostsLoaded && (
+                  <input value={communitySearch} onChange={(e) => setCommunitySearch(e.target.value)}
+                    placeholder="🔍 ابحث بالعنوان أو الكاتب أو المحتوى..."
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                )}
+                {communityPostsLoading ? (
+                  <p className="text-center text-sm text-gray-400 py-4">جاري التحميل...</p>
+                ) : !communityPostsLoaded ? (
+                  <button onClick={() => void loadCommunityPosts()} className="mx-auto block mt-2 text-xs text-indigo-500 underline">تحميل المنشورات</button>
+                ) : filteredCommunityPosts.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-4">لا توجد منشورات</p>
+                ) : (
+                  filteredCommunityPosts.map((post) => (
+                    <div key={post.id} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 p-4">
+                      <button onClick={() => handleDeleteCommunityPost(post.id)} className="text-xs rounded-full px-3 py-1.5 font-semibold border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1 shrink-0">
+                        <Trash2 size={12} /> حذف
+                      </button>
+                      <div className="text-right flex-1 min-w-0">
+                        <div className="font-semibold text-gray-900 text-sm">{post.title}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {post.authorName} · {post.commentsCount ?? 0} تعليق · {post.likesCount ?? 0} إعجاب
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "engagement" && (
           <div className="space-y-6">
             {/* ── Course Reviews Moderation ── */}
@@ -1710,6 +2348,11 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 <button onClick={() => void loadReviews()} className="text-sm font-semibold text-indigo-600">تحديث</button>
                 <h3 className="font-bold text-gray-900 text-lg">تقييمات الكورسات</h3>
               </div>
+              {reviews.length > 0 && (
+                <input value={reviewSearch} onChange={(e) => setReviewSearch(e.target.value)}
+                  placeholder="🔍 ابحث بالمستخدم أو الكورس..."
+                  className="w-full mb-4 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              )}
               {reviewsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                   <Loader2 size={16} className="animate-spin" />
@@ -1723,7 +2366,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {reviews.map((review) => (
+                  {reviews.filter((r) => matches(reviewSearch, r.userName, r.courseTitle, r.comment)).map((review) => (
                     <div key={review.id} className={`rounded-2xl border p-4 transition-colors ${
                       review.status === "rejected" ? "border-red-100 bg-red-50/30" :
                       review.status === "approved" ? "border-green-100 bg-green-50/20" :
@@ -1775,6 +2418,11 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 <button onClick={() => void loadComments()} className="text-sm font-semibold text-indigo-600">تحديث</button>
                 <h3 className="font-bold text-gray-900 text-lg">تعليقات الدروس</h3>
               </div>
+              {comments.length > 0 && (
+                <input value={commentSearch} onChange={(e) => setCommentSearch(e.target.value)}
+                  placeholder="🔍 ابحث بالمستخدم أو الكورس أو نص التعليق..."
+                  className="w-full mb-4 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              )}
               {commentsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                   <Loader2 size={16} className="animate-spin" />
@@ -1788,7 +2436,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {comments.slice(0, 30).map((item) => (
+                  {comments.filter((c) => matches(commentSearch, c.userName, c.courseTitle, c.lessonTitle, c.content)).slice(0, 30).map((item) => (
                     <div key={item.id} className="rounded-2xl border border-gray-100 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <button
@@ -1899,6 +2547,60 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmUserAction}
+        onOpenChange={(open) => { if (!open) setConfirmUserAction(null); }}
+        title={confirmUserAction?.type === "permanent" ? "حذف نهائي؟" : "حذف هذا المستخدم؟"}
+        description={
+          confirmUserAction?.type === "permanent"
+            ? "سيتم محو هذا الحساب وكل بياناته نهائياً من قاعدة البيانات. لا يمكن التراجع عن هذا الإجراء أو استرجاع الحساب بعده."
+            : "لن يتمكن من تسجيل الدخول مجدداً، لكن بياناته تبقى محفوظة ويمكن استرجاع الحساب لاحقاً."
+        }
+        confirmLabel={confirmUserAction?.type === "permanent" ? "حذف نهائي" : "حذف"}
+        loading={confirmActionLoading}
+        onConfirm={runConfirmedUserAction}
+      />
+
+      <ConfirmDialog
+        open={!!genericConfirm}
+        onOpenChange={(open) => { if (!open) setGenericConfirm(null); }}
+        title={genericConfirm?.title ?? ""}
+        description={genericConfirm?.description ?? ""}
+        confirmLabel="حذف"
+        loading={genericConfirmLoading}
+        onConfirm={runGenericConfirm}
+      />
+
+      <ConfirmDialog
+        open={projectToDelete != null}
+        onOpenChange={(open) => { if (!open) setProjectToDelete(null); }}
+        title="حذف هذا المشروع؟"
+        description="لا يمكن التراجع عن هذا الإجراء."
+        confirmLabel="حذف"
+        loading={projectDeleteLoading}
+        onConfirm={confirmDeleteProject}
+      />
+
+      <ConfirmDialog
+        open={exampleToDelete != null}
+        onOpenChange={(open) => { if (!open) setExampleToDelete(null); }}
+        title="حذف هذا المثال؟"
+        description="لا يمكن التراجع عن هذا الإجراء."
+        confirmLabel="حذف"
+        loading={exampleDeleteLoading}
+        onConfirm={confirmDeleteExample}
+      />
+
+      <ConfirmDialog
+        open={communityPostToDelete != null}
+        onOpenChange={(open) => { if (!open) setCommunityPostToDelete(null); }}
+        title="حذف هذا المنشور؟"
+        description="سيتم حذف المنشور وجميع تعليقاته وإعجاباته نهائياً."
+        confirmLabel="حذف"
+        loading={communityDeleteLoading}
+        onConfirm={confirmDeleteCommunityPost}
+      />
     </div>
   );
 }

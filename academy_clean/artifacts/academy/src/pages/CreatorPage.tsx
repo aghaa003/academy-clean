@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCreateChallenge } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
@@ -97,6 +98,10 @@ const CHALLENGE_SECTIONS = [
 
 export default function CreatorPage() {
   const { user, isLoaded } = useCurrentUser();
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<
+    { type: "lesson"; courseId: number; lessonId: number } | { type: "course"; courseId: number } | null
+  >(null);
+  const [confirmDeleteLoading, setConfirmDeleteLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [courseForm, setCourseForm] = useState({
     title: "", description: "", category: "", level: "beginner",
@@ -529,8 +534,25 @@ export default function CreatorPage() {
     }
   };
 
-  const handleDeleteLesson = async (courseId: number, lessonId: number) => {
-    if (!window.confirm("هل تريد حذف هذا الدرس نهائياً؟ سيتم حذف جميع التعليقات والإعجابات والتقدم المرتبطة به.")) return;
+  const runConfirmDelete = async () => {
+    if (!confirmDeleteTarget) return;
+    setConfirmDeleteLoading(true);
+    try {
+      if (confirmDeleteTarget.type === "lesson") {
+        await performDeleteLesson(confirmDeleteTarget.courseId, confirmDeleteTarget.lessonId);
+      } else {
+        await performDeleteCourse(confirmDeleteTarget.courseId);
+      }
+    } finally {
+      setConfirmDeleteLoading(false);
+      setConfirmDeleteTarget(null);
+    }
+  };
+
+  const handleDeleteLesson = (courseId: number, lessonId: number) =>
+    setConfirmDeleteTarget({ type: "lesson", courseId, lessonId });
+
+  const performDeleteLesson = async (courseId: number, lessonId: number) => {
     setDeletingLesson((prev) => ({ ...prev, [lessonId]: true }));
     setDeleteError("");
     try {
@@ -592,8 +614,9 @@ export default function CreatorPage() {
     }
   };
 
-  const handleDeleteCourse = async (courseId: number) => {
-    if (!window.confirm("هل تريد حذف هذا الكورس نهائياً؟")) return;
+  const handleDeleteCourse = (courseId: number) => setConfirmDeleteTarget({ type: "course", courseId });
+
+  const performDeleteCourse = async (courseId: number) => {
     setDeleteSaving((prev) => ({ ...prev, [courseId]: true }));
     setDeleteError("");
     setDeleteMessage("");
@@ -1149,6 +1172,20 @@ export default function CreatorPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteTarget}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteTarget(null); }}
+        title={confirmDeleteTarget?.type === "lesson" ? "حذف هذا الدرس؟" : "حذف هذا الكورس؟"}
+        description={
+          confirmDeleteTarget?.type === "lesson"
+            ? "سيتم حذف الدرس نهائياً مع جميع التعليقات والإعجابات والتقدم المرتبطة به."
+            : "سيتم حذف هذا الكورس نهائياً. لا يمكن التراجع عن هذا الإجراء."
+        }
+        confirmLabel="حذف"
+        loading={confirmDeleteLoading}
+        onConfirm={runConfirmDelete}
+      />
 
       <Footer />
     </div>

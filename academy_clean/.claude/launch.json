@@ -11,6 +11,7 @@
       "name": "laravel-backend",
       "runtimeExecutable": "php",
       "runtimeArgs": ["artisan", "serve"],
+      "cwd": "C:\\Users\\aghaa\\Desktop\\testlaravel - Copy - Copy",
       "port": 8000
     }
   ]

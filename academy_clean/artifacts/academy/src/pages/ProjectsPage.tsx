@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { CheckCircle, Clock, Trash2, ChevronRight, Loader2, XCircle, Star, Upload, X, Lock, Eye, Plus } from "lucide-react";
+import { CheckCircle, Clock, Trash2, ChevronRight, Loader2, XCircle, Star, Upload, X, Lock, Eye } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
@@ -106,6 +106,7 @@ interface Assignment {
   question: string;
   description: string | null;
   requirements: string | null;
+  help_text: string | null;
   difficulty: number;
   language: string | null;
   points: number;
@@ -152,15 +153,17 @@ const TRACK_LABELS: Record<ProjectTrack, string> = {
   backend: "مسار Backend",
 };
 
-const STARTED_PROJECTS_KEY = "academy_started_projects";
+// Scoped per signed-in user so one account's started-project list doesn't
+// leak into whichever account next uses the same browser.
+const startedProjectsKey = (userId: string | null | undefined) => `academy_started_projects_${userId ?? "guest"}`;
 
-function loadStarted(): StartedProject[] {
-  try { return JSON.parse(localStorage.getItem(STARTED_PROJECTS_KEY) ?? "[]") as StartedProject[]; }
+function loadStarted(userId: string | null | undefined): StartedProject[] {
+  try { return JSON.parse(localStorage.getItem(startedProjectsKey(userId)) ?? "[]") as StartedProject[]; }
   catch { return []; }
 }
 
-function saveStarted(list: StartedProject[]) {
-  localStorage.setItem(STARTED_PROJECTS_KEY, JSON.stringify(list));
+function saveStarted(userId: string | null | undefined, list: StartedProject[]) {
+  localStorage.setItem(startedProjectsKey(userId), JSON.stringify(list));
 }
 
 function readFileAsText(file: File): Promise<string> {
@@ -189,6 +192,7 @@ export default function ProjectsPage() {
   const [hintLoading,   setHintLoading]   = useState(false);
 const [hintText,      setHintText]       = useState<string | null>(null);
 const [hintMermaid,   setHintMermaid]    = useState<string | null>(null);
+const [hintDiagramType, setHintDiagramType] = useState<"mistake" | "solution">("solution");
 const [fixLoading,    setFixLoading]     = useState(false);
 const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -207,7 +211,6 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   // Dynamic projects (fetched from backend)
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
-  const canManage = user?.role === "admin" || user?.role === "employer";
 
   // Dynamic assignments (fetched from backend)
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -216,16 +219,6 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
   // Solution file upload (for AI review)
   const [solutionFile, setSolutionFile] = useState<File | null>(null);
   const solutionFileRef = useRef<HTMLInputElement | null>(null);
-
-  // Add project form state (admin/employer only)
-  const [showAddProjectForm, setShowAddProjectForm] = useState(false);
-  const [newProjectTrack, setNewProjectTrack] = useState<ProjectTrack>("basics");
-  const [newProjectTitle, setNewProjectTitle] = useState("");
-  const [newProjectDesc, setNewProjectDesc] = useState("");
-  const [newProjectDifficulty, setNewProjectDifficulty] = useState(2);
-  const [newProjectTags, setNewProjectTags] = useState("");
-  const [newProjectCategory, setNewProjectCategory] = useState("");
-  const [savingProject, setSavingProject] = useState(false);
 
   const fetchProjects = useCallback(() => {
     setProjectsLoading(true);
@@ -249,49 +242,26 @@ const [fixedCode,     setFixedCode]      = useState<string | null>(null);
       .finally(() => setProjectsLoading(false));
   }, []);
 
-  useEffect(() => { setStartedProjects(loadStarted()); }, []);
+  useEffect(() => {
+    const local = loadStarted(user?.id);
+    setStartedProjects(local);
+    // Prune entries whose linked repo was deleted elsewhere (e.g. from the
+    // profile page) — otherwise this list kept showing "in progress" for
+    // projects that no longer have any backing repository.
+    const withDbId = local.filter((s) => s.dbId);
+    if (withDbId.length === 0) return;
+    Promise.all(
+      withDbId.map((s) => apiFetch(`/api/repositories/${s.dbId}`).then((r) => ({ projectId: s.projectId, exists: r.ok })))
+    ).then((results) => {
+      const deletedIds = new Set(results.filter((r) => !r.exists).map((r) => r.projectId));
+      if (deletedIds.size === 0) return;
+      const pruned = local.filter((s) => !deletedIds.has(s.projectId));
+      setStartedProjects(pruned);
+      saveStarted(user?.id, pruned);
+    }).catch(() => {});
+  }, [user?.id]);
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
-  const handleAddProject = async () => {
-    if (!newProjectTitle.trim() || savingProject) return;
-    setSavingProject(true);
-    try {
-      const res = await apiFetch("/api/projects", {
-        method: "POST",
-        body: JSON.stringify({
-          track: newProjectTrack,
-          title: newProjectTitle.trim(),
-          desc: newProjectDesc.trim() || null,
-          difficulty: newProjectDifficulty,
-          tags: newProjectTags.split(",").map((t) => t.trim()).filter(Boolean),
-          category: newProjectCategory.trim() || null,
-        }),
-      });
-      if (res.ok) {
-        setNewProjectTitle("");
-        setNewProjectDesc("");
-        setNewProjectDifficulty(2);
-        setNewProjectTags("");
-        setNewProjectCategory("");
-        setShowAddProjectForm(false);
-        fetchProjects();
-      }
-    } catch {
-      /* silent */
-    } finally {
-      setSavingProject(false);
-    }
-  };
-
-  const handleDeleteProject = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المشروع؟")) return;
-    try {
-      const res = await apiFetch(`/api/projects/${id}`, { method: "DELETE" });
-      if (res.ok) setProjects((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      /* silent */
-    }
-  };
 
   const activeLang: AssignmentLang =
     activeCategory === "basics"
@@ -338,9 +308,10 @@ const getProjectHint = async (problem: string) => {
     });
 
     if (res.ok) {
-      const data = await res.json() as { hint?: string; mermaid?: string; ai_response?: string };
+      const data = await res.json() as { hint?: string; mermaid?: string; ai_response?: string; diagramType?: "mistake" | "solution" };
       setHintText(data.hint ?? data.ai_response ?? null);
       setHintMermaid(data.mermaid ?? null);
+      setHintDiagramType(data.diagramType ?? (solution.trim() ? "mistake" : "solution"));
     }
   } catch { /* silent */ }
   finally { setHintLoading(false); }
@@ -451,10 +422,16 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
 
   const handleHelpRequest = () => {
     if (!currentAssignment) return;
+    // Prefer the help text the admin/content-creator wrote for this specific
+    // assignment; fall back to a generic prompt only if none was provided.
+    const adminHelp = currentAssignment.help_text?.trim();
+    const helpLine = adminHelp
+      ? adminHelp
+      : "ابدأ بتعريف المتغيرات المطلوبة، ثم فكر في المنطق الأساسي خطوة بخطوة.";
     setSolution((prev) =>
       prev
-        ? `${prev}\n\n-- تلميح: حاول تقسيم المسألة لخطوات صغيرة وابدأ بالحالة الأبسط أولاً.`
-        : `-- تلميح لمسألة "${currentAssignment.title}":\n-- ابدأ بتعريف المتغيرات المطلوبة\n-- ثم فكر في المنطق الأساسي خطوة بخطوة`
+        ? `${prev}\n\n-- مساعدة: ${helpLine}`
+        : `-- مساعدة لمسألة "${currentAssignment.title}":\n-- ${helpLine}`
     );
   };
 
@@ -490,7 +467,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
     }
     const updated = [...startedProjects, entry];
     setStartedProjects(updated);
-    saveStarted(updated);
+    saveStarted(user?.id, updated);
     setJustStarted(project.id);
     setTimeout(() => setJustStarted(null), 3000);
   };
@@ -500,13 +477,19 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
       s.projectId === projectId ? { ...s, status: "done" as ProjectStatus } : s
     );
     setStartedProjects(updated);
-    saveStarted(updated);
+    saveStarted(user?.id, updated);
   };
 
   const handleRemoveProject = (projectId: number) => {
+    const entry = startedProjects.find((s) => s.projectId === projectId);
     const updated = startedProjects.filter((s) => s.projectId !== projectId);
     setStartedProjects(updated);
-    saveStarted(updated);
+    saveStarted(user?.id, updated);
+    // Also remove the linked draft/solution repository — otherwise removing a
+    // project here left an orphaned entry showing up on the profile page.
+    if (entry?.dbId) {
+      apiFetch(`/api/repositories/${entry.dbId}`, { method: "DELETE" }).catch(() => {});
+    }
   };
 
   const openUploadModal = (projectId: number) => {
@@ -542,6 +525,10 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
         if (upRes.ok) {
           const upData = await upRes.json() as { file?: { url: string }; url?: string };
           fileUrl = upData.file?.url ?? upData.url ?? "";
+        } else {
+          alert("فشل رفع الملف، يرجى المحاولة مجدداً.");
+          setUploading(false);
+          return;
         }
       }
 
@@ -557,28 +544,44 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
         }
       }
 
-      const repoRes = await apiFetch("/api/repositories", {
-  method: "POST",
-  body: JSON.stringify({
-          title: `حل: ${project.title}`,
-          description: uploadSolutionText.trim() || `حل مشروع ${project.title}`,
-          technologies: project.tags,
-          codeFilesUrls: fileUrl ? [fileUrl] : [],
-          pdfFilesUrls: [],
-          coverImageUrl,
-          userId: user.id,
-          isPublic: uploadIsPublic,
-          sourceProject: String(project.id),
-        }),
-});
-    
+      // Update the existing draft repo created when the project was started,
+      // rather than creating a second, disconnected repository — this is what
+      // kept the project-page and profile-page repo lists out of sync.
+      const startedEntry = startedProjects.find((s) => s.projectId === project.id);
+      const payload = {
+        title: `حل: ${project.title}`,
+        description: uploadSolutionText.trim() || `حل مشروع ${project.title}`,
+        technologies: project.tags,
+        codeFilesUrls: fileUrl ? [fileUrl] : [],
+        pdfFilesUrls: [],
+        coverImageUrl,
+        userId: user.id,
+        isPublic: uploadIsPublic,
+        isDraft: false,
+        sourceProject: String(project.id),
+      };
+
+      const repoRes = startedEntry?.dbId
+        ? await apiFetch(`/api/repositories/${startedEntry.dbId}`, { method: "PUT", body: JSON.stringify(payload) })
+        : await apiFetch("/api/repositories", { method: "POST", body: JSON.stringify(payload) });
 
       if (repoRes.ok) {
+        if (!startedEntry?.dbId) {
+          const data = await repoRes.json() as { id?: number };
+          if (data.id) {
+            const updated = startedProjects.map((s) => (s.projectId === project.id ? { ...s, dbId: data.id } : s));
+            setStartedProjects(updated);
+            saveStarted(user?.id, updated);
+          }
+        }
         setUploadSuccess(true);
         handleFinishProject(project.id);
         setTimeout(closeUploadModal, 2000);
       } else {
-        alert("فشل رفع الحل، يرجى المحاولة مجدداً");
+        // Surface the backend's real validation message (e.g. the anti-cheat /
+        // "not enough evidence of work" check) instead of a generic failure alert.
+        const err = await repoRes.json().catch(() => null) as { error?: string } | null;
+        alert(err?.error ?? "فشل رفع الحل، يرجى المحاولة مجدداً");
       }
     } catch {
       alert("حدث خطأ أثناء رفع الحل");
@@ -697,13 +700,13 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                         {solutionFile ? (
                           <span className="text-indigo-600 font-semibold">✓ {solutionFile.name}</span>
                         ) : (
-                          "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .html, .css, .java, .zip, .txt)"
+                          "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .css, .java, .zip, .txt)"
                         )}
                       </p>
                       <input
                         ref={solutionFileRef}
                         type="file"
-                        accept=".py,.js,.ts,.cpp,.c,.cs,.html,.css,.java,.zip,.txt"
+                        accept=".py,.js,.ts,.cpp,.c,.cs,.css,.java,.zip,.txt"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null;
@@ -767,73 +770,78 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
               )}
 
               {!assignmentsLoading && currentAssignment && (
-              <div className="flex gap-3 px-6 pb-6 flex-wrap">
-                <button
-                  onClick={handleNextAssignment}
-                  className="rounded-full px-6 py-2.5 font-semibold text-sm text-white"
-                  style={{ background: "#f59e0b" }}
-                  data-testid="button-next-assignment"
-                >
-                  السؤال التالي
-                </button>
-                <button
-                  onClick={handleHelpRequest}
-                  className="rounded-full px-6 py-2.5 font-semibold text-sm border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  data-testid="button-help"
-                >
-                  طلب مساعدة
-                </button>
-                <button
-  onClick={() => getProjectHint(currentAssignment?.question ?? "")}
-  disabled={hintLoading}
-  className="rounded-full px-4 py-2 text-sm text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50"
->
-  {hintLoading ? <Loader2 size={13} className="animate-spin inline" /> : "💡 تلميح"}
-</button>
+              <div className="px-6 pb-6 space-y-4">
+                <div className="flex gap-3 flex-wrap">
+                  <button
+                    onClick={handleNextAssignment}
+                    className="rounded-full px-6 py-2.5 font-semibold text-sm text-white"
+                    style={{ background: "#f59e0b" }}
+                    data-testid="button-next-assignment"
+                  >
+                    السؤال التالي
+                  </button>
+                  <button
+                    onClick={handleHelpRequest}
+                    className="rounded-full px-6 py-2.5 font-semibold text-sm border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    data-testid="button-help"
+                  >
+                    طلب مساعدة
+                  </button>
+                  <button
+                    onClick={() => getProjectHint(currentAssignment?.question ?? "")}
+                    disabled={hintLoading}
+                    className="rounded-full px-4 py-2 text-sm text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {hintLoading ? <Loader2 size={13} className="animate-spin inline" /> : "💡 تلميح"}
+                  </button>
+                  <button
+                    onClick={() => getProjectFix(solution, String(activeLang), currentAssignment?.question ?? "")}
+                    disabled={fixLoading || !solution.trim()}
+                    className="rounded-full px-4 py-2 text-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
+                  >
+                    {fixLoading ? <Loader2 size={13} className="animate-spin inline" /> : "🔧 إصلاح الكود"}
+                  </button>
+                  <button
+                    onClick={handleSubmitSolution}
+                    disabled={reviewing}
+                    className="rounded-full px-6 py-2.5 font-semibold text-sm text-white flex items-center gap-2 disabled:opacity-70"
+                    style={{ background: "#16a34a" }}
+                    data-testid="button-submit"
+                  >
+                    {reviewing ? <><Loader2 size={14} className="animate-spin" /> جاري التقييم...</> : "تقديم الحل"}
+                  </button>
+                </div>
 
-<button
-  onClick={() => getProjectFix(solution, String(activeLang), currentAssignment?.question ?? "")}
-  disabled={fixLoading || !solution.trim()}
-  className="rounded-full px-4 py-2 text-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
->
-  {fixLoading ? <Loader2 size={13} className="animate-spin inline" /> : "🔧 إصلاح الكود"}
-</button>
+                {/* Result panels render as full-width blocks below the button row,
+                    instead of as flex siblings squeezed in next to the buttons. */}
+                {(hintText || hintMermaid) && (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right space-y-3">
+                    {hintText && <p>🔍 {hintText}</p>}
+                    {hintMermaid && (
+                      <div className="bg-white rounded-lg border border-indigo-100 p-3">
+                        <div className="text-xs text-indigo-400 mb-2 font-semibold">
+                          {hintDiagramType === "mistake" ? "مخطط يوضح أين أخطأت" : "مخطط الحل الصحيح"}
+                        </div>
+                        <MermaidDiagram chart={hintMermaid} />
+                      </div>
+                    )}
+                  </div>
+                )}
 
-{(hintText || hintMermaid) && (
-  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800 text-right space-y-3">
-    {hintText && <p>🔍 {hintText}</p>}
-    {hintMermaid && (
-      <div className="bg-white rounded-lg border border-indigo-100 p-3">
-        <div className="text-xs text-indigo-400 mb-2 font-semibold">مخطط الحل الصحيح</div>
-        <MermaidDiagram chart={hintMermaid} />
-      </div>
-    )}
-  </div>
-)}
-
-{fixedCode && (
-  <div className="bg-gray-900 rounded-xl p-4 text-xs font-mono text-green-400 overflow-x-auto">
-    <div className="flex justify-between items-center mb-2">
-      <button
-        onClick={() => setSolution(fixedCode)}
-        className="text-xs text-green-300 border border-green-700 rounded px-2 py-1"
-      >
-        استخدم هذا الكود
-      </button>
-      <span className="text-gray-500">الكود المصحح</span>
-    </div>
-    <pre>{fixedCode}</pre>
-  </div>
-)}
-                <button
-                  onClick={handleSubmitSolution}
-                  disabled={reviewing}
-                  className="rounded-full px-6 py-2.5 font-semibold text-sm text-white flex items-center gap-2 disabled:opacity-70"
-                  style={{ background: "#16a34a" }}
-                  data-testid="button-submit"
-                >
-                  {reviewing ? <><Loader2 size={14} className="animate-spin" /> جاري التقييم...</> : "تقديم الحل"}
-                </button>
+                {fixedCode && (
+                  <div className="bg-gray-900 rounded-xl p-4 text-xs font-mono text-green-400 overflow-x-auto">
+                    <div className="flex justify-between items-center mb-2">
+                      <button
+                        onClick={() => setSolution(fixedCode)}
+                        className="text-xs text-green-300 border border-green-700 rounded px-2 py-1"
+                      >
+                        استخدم هذا الكود
+                      </button>
+                      <span className="text-gray-500">الكود المصحح</span>
+                    </div>
+                    <pre>{fixedCode}</pre>
+                  </div>
+                )}
               </div>
               )}
             </div>
@@ -944,9 +952,9 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                     </div>
                     {sp.status === "inProgress" && (
                       <div className="flex flex-col gap-1.5">
-                        <button onClick={() => handleFinishProject(sp.projectId)} className="rounded-full text-xs px-3 py-1.5 bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors">
-                          ✓ تم الانتهاء
-                        </button>
+                        {/* No unchecked "instant finish" button — completion only happens
+                            through رفع الحل, which the backend validates (real files/
+                            description, not just a click). */}
                         {user && (
                           <button
                             onClick={() => openUploadModal(sp.projectId)}
@@ -990,80 +998,8 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                 {TRACK_LABELS[track]}
               </button>
             ))}
-            {canManage && (
-              <button
-                onClick={() => { setShowAddProjectForm((v) => !v); setNewProjectTrack(activeTrack); }}
-                className="flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white shadow transition-all hover:shadow-md"
-                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
-                data-testid="button-add-project"
-              >
-                {showAddProjectForm ? <X size={16} /> : <Plus size={16} />}
-                {showAddProjectForm ? "إلغاء" : "إضافة مشروع"}
-              </button>
-            )}
           </div>
         </div>
-
-        {canManage && showAddProjectForm && (
-          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mb-8 max-w-3xl mx-auto">
-            <h3 className="font-bold text-gray-900 mb-4 text-right">إضافة مشروع جديد</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <input
-                value={newProjectTitle}
-                onChange={(e) => setNewProjectTitle(e.target.value)}
-                placeholder="عنوان المشروع"
-                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-              <select
-                value={newProjectTrack}
-                onChange={(e) => setNewProjectTrack(e.target.value as ProjectTrack)}
-                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              >
-                {(["basics", "frontend", "backend"] as ProjectTrack[]).map((track) => (
-                  <option key={track} value={track}>{TRACK_LABELS[track]}</option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              value={newProjectDesc}
-              onChange={(e) => setNewProjectDesc(e.target.value)}
-              placeholder="وصف المشروع"
-              rows={2}
-              className="w-full border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4 resize-none"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-              <input
-                value={newProjectCategory}
-                onChange={(e) => setNewProjectCategory(e.target.value)}
-                placeholder="التصنيف (مثل: تطوير ويب)"
-                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-              <input
-                value={newProjectTags}
-                onChange={(e) => setNewProjectTags(e.target.value)}
-                placeholder="التقنيات (مفصولة بفواصل)"
-                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-              <select
-                value={newProjectDifficulty}
-                onChange={(e) => setNewProjectDifficulty(Number(e.target.value))}
-                className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              >
-                {[1, 2, 3, 4, 5].map((d) => (
-                  <option key={d} value={d}>الصعوبة: {d}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={handleAddProject}
-              disabled={!newProjectTitle.trim() || savingProject}
-              className="rounded-xl px-6 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
-            >
-              {savingProject ? "جاري الحفظ..." : "حفظ المشروع"}
-            </button>
-          </div>
-        )}
 
         {projectsLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1086,16 +1022,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                 data-testid={`card-project-${project.id}`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  {canManage && (
-                    <button
-                      onClick={() => handleDeleteProject(project.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                      data-testid={`button-delete-project-${project.id}`}
-                      title="حذف المشروع"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+
                   <div className="text-xs text-indigo-500 font-semibold text-right flex-1">{project.category} 🏷</div>
                 </div>
                 <h3 className="font-bold text-gray-900 text-lg mb-2 text-right">{project.title}</h3>
@@ -1128,9 +1055,8 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                     </div>
                     {started.status === "inProgress" && (
                       <>
-                        <button onClick={() => handleFinishProject(project.id)} className="w-full rounded-full py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 transition-colors">
-                          ✓ تم الانتهاء
-                        </button>
+                        {/* No unchecked "instant finish" button — completion only happens
+                            through رفع الحل, which the backend validates. */}
                         {user && (
                           <button
                             onClick={() => openUploadModal(project.id)}
@@ -1203,13 +1129,13 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                       <p className="text-sm text-gray-500">
                         {uploadFile
                           ? <span className="text-indigo-600 font-semibold">✓ {uploadFile.name}</span>
-                          : "انقر لرفع ملف الحل (.zip, .py, .js, .ts, .html, ...)"
+                          : "انقر لرفع ملف الحل (.zip, .py, .js, .ts, ...)"
                         }
                       </p>
                       <input
                         ref={uploadFileRef}
                         type="file"
-                        accept=".py,.js,.ts,.cpp,.c,.cs,.html,.css,.java,.zip,.txt,.rar,.gz"
+                        accept=".py,.js,.ts,.cpp,.c,.cs,.css,.java,.zip,.txt,.rar,.gz"
                         className="hidden"
                         onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
                       />
@@ -1288,6 +1214,7 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
           </div>
         </div>
       )}
+
     </div>
   );
 }

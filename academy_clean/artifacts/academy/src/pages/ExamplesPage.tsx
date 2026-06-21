@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/layout/HeroSection";
-import { useCurrentUser } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api-fetch";
-import { Search, ChevronDown, ChevronUp, Code2, Copy, Terminal, Check, Plus, Trash2, X } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, Code2, Copy, Terminal, Check } from "lucide-react";
 
 const FILTERS = ["الكل", "Frontend", "Backend", "تطبيقات الجوال", "الخوارزميات"];
 
@@ -32,24 +31,12 @@ interface ExampleItem {
 }
 
 export default function ExamplesPage() {
-  const { user } = useCurrentUser();
-  const canManage = user?.role === "admin" || user?.role === "employer";
-
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("الكل");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [examples, setExamples] = useState<ExampleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newCategory, setNewCategory] = useState("Frontend");
-  const [newCode, setNewCode] = useState("");
-  const [newInstall, setNewInstall] = useState("");
-  const [newTechs, setNewTechs] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const fetchExamples = () => {
     setIsLoading(true);
@@ -77,48 +64,6 @@ export default function ExamplesPage() {
       setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
     } catch {
       /* clipboard not available */
-    }
-  };
-
-  const handleAddExample = async () => {
-    if (!newTitle.trim() || !newCode.trim() || saving) return;
-    setSaving(true);
-    try {
-      const res = await apiFetch("/api/examples", {
-        method: "POST",
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          description: newDescription.trim() || null,
-          category: newCategory,
-          code: newCode,
-          install_command: newInstall.trim() || null,
-          technologies: newTechs.split(",").map((t) => t.trim()).filter(Boolean),
-        }),
-      });
-      if (res.ok) {
-        setNewTitle("");
-        setNewDescription("");
-        setNewCategory("Frontend");
-        setNewCode("");
-        setNewInstall("");
-        setNewTechs("");
-        setShowAddForm(false);
-        fetchExamples();
-      }
-    } catch {
-      /* silent */
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteExample = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المثال؟")) return;
-    try {
-      const res = await apiFetch(`/api/examples/${id}`, { method: "DELETE" });
-      if (res.ok) setExamples((prev) => prev.filter((e) => e.id !== id));
-    } catch {
-      /* silent */
     }
   };
 
@@ -167,80 +112,7 @@ export default function ExamplesPage() {
                 </button>
               ))}
             </div>
-            {canManage && (
-              <button
-                onClick={() => setShowAddForm((v) => !v)}
-                className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:shadow-md"
-                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
-                data-testid="button-add-example"
-              >
-                {showAddForm ? <X size={16} /> : <Plus size={16} />}
-                {showAddForm ? "إلغاء" : "إضافة مثال"}
-              </button>
-            )}
           </div>
-
-          {/* Add example form (admin/employer only) */}
-          {canManage && showAddForm && (
-            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mb-8">
-              <h3 className="font-bold text-gray-900 mb-4 text-right">إضافة مثال جديد</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <input
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="عنوان المثال"
-                  className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-                <select
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                >
-                  {FILTERS.filter((f) => f !== "الكل").map((f) => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-              </div>
-              <textarea
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                placeholder="وصف مختصر للمثال"
-                rows={2}
-                className="w-full border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4 resize-none"
-              />
-              <textarea
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                placeholder="الكود البرمجي"
-                rows={6}
-                className="w-full border border-gray-200 rounded-xl p-3 text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4 resize-none"
-                dir="ltr"
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <input
-                  value={newInstall}
-                  onChange={(e) => setNewInstall(e.target.value)}
-                  placeholder="أمر التثبيت (اختياري) مثل: npm install react"
-                  className="border border-gray-200 rounded-xl p-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  dir="ltr"
-                />
-                <input
-                  value={newTechs}
-                  onChange={(e) => setNewTechs(e.target.value)}
-                  placeholder="التقنيات (مفصولة بفواصل) مثل: React, TypeScript"
-                  className="border border-gray-200 rounded-xl p-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
-              <button
-                onClick={handleAddExample}
-                disabled={!newTitle.trim() || !newCode.trim() || saving}
-                className="rounded-xl px-6 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "linear-gradient(90deg,#3730a3,#7c3aed)" }}
-              >
-                {saving ? "جاري الحفظ..." : "حفظ المثال"}
-              </button>
-            </div>
-          )}
 
           {/* Examples grid */}
           {isLoading ? (
@@ -268,16 +140,6 @@ export default function ExamplesPage() {
                         >
                           {diff.label}
                         </span>
-                        {canManage && (
-                          <button
-                            onClick={() => handleDeleteExample(item.id)}
-                            className="text-gray-400 hover:text-red-500 transition-colors"
-                            data-testid={`button-delete-example-${item.id}`}
-                            title="حذف المثال"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
                       </div>
                       <span className="text-xs font-bold text-indigo-700 bg-indigo-100 rounded-full px-3 py-1">{item.category}</span>
                       <Code2 size={18} className="text-indigo-500" />

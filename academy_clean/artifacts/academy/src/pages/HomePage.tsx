@@ -60,7 +60,12 @@ const [, navigate] = useLocation();
     try {
       const res = await apiFetch("/api/home-reviews", {
         method: "POST",
-        body: JSON.stringify({ rating, comment: reviewText.trim(), reviewerName: reviewerName.trim() || "زائر" }),
+        // ✅ Fixed: backend validates "reviewer_name" (snake_case) — the previous
+        // camelCase key was silently dropped, so the typed name never reached the
+        // server and every review fell back to the real account name. Also: leave
+        // it blank instead of forcing "زائر" so the backend can treat an empty
+        // name as "stay anonymous" rather than a literal display name.
+        body: JSON.stringify({ rating, comment: reviewText.trim(), reviewer_name: reviewerName.trim() || null }),
       });
       if (res.ok) {
         setSubmitted(true);
@@ -103,7 +108,7 @@ const [, navigate] = useLocation();
                 ابدأ التعلم مجاناً
               </Link>
               <Link
-                href="/examples"
+                href="/roadmap"
                 className="rounded-full px-8 py-3.5 text-sm font-bold text-white border-2 border-white/50 hover:bg-white/10 transition-all"
                 data-testid="link-explore"
               >
@@ -236,22 +241,30 @@ const [, navigate] = useLocation();
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-lg transition-shadow"
                 data-testid={`card-repo-${repo.id}`}
               >
-                <div
-                  className="h-44 relative flex items-center justify-center overflow-hidden"
-                  style={!(repo as any).coverImageUrl ? { background: "linear-gradient(135deg,#1e1b4b,#3730a3)" } : {}}
-                >
+                <div className="h-44 relative overflow-hidden">
                   {(repo as any).coverImageUrl ? (
-                    <img src={(repo as any).coverImageUrl} alt={repo.title ?? ""} className="w-full h-full object-cover" />
+                    <img
+                      src={(repo as any).coverImageUrl}
+                      alt={repo.title ?? ""}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
                   ) : (
-                    <Code2 size={48} className="text-white/20" />
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{ background: "linear-gradient(135deg,#1e1b4b,#3730a3)" }}
+                    >
+                      <Code2 size={48} className="text-white/20" />
+                    </div>
                   )}
-           <button
-  onClick={() => navigate(`/users/${repo.owner?.id ?? repo.owner_id ?? ""}`)}
-  className="rounded-full px-5 py-2 text-sm font-bold text-white"
-  style={{ background: "linear-gradient(90deg,#06b6d4,#14b8a6)" }}
->
-  عرض الملف الشخصي
-</button>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                    <button
+                      onClick={() => navigate(`/users/${repo.owner?.id ?? repo.owner_id ?? ""}`)}
+                      className="rounded-full px-5 py-2 text-sm font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ background: "linear-gradient(90deg,#06b6d4,#14b8a6)" }}
+                    >
+                      عرض الملف الشخصي
+                    </button>
+                  </div>
                 </div>
                 <div className="p-5">
                   <div className="flex items-center gap-2 mb-3">
@@ -259,6 +272,12 @@ const [, navigate] = useLocation();
                       {(repo.ownerName ?? repo.owner?.name)?.charAt(0) ?? "م"}
                     </div>
                     <span className="text-sm text-gray-500">{repo.ownerName ?? repo.owner?.name}</span>
+                  </div>
+                  <div className="flex items-center justify-end gap-1 mb-1">
+                    <span className="text-xs text-gray-500">
+                      {(repo as any).averageRating > 0 ? (repo as any).averageRating.toFixed(1) : "—"} ({(repo as any).ratingsCount ?? 0})
+                    </span>
+                    <Star size={14} fill="#f59e0b" stroke="#f59e0b" />
                   </div>
                   <h3 className="font-bold text-gray-900 mb-1 text-right">{repo.title}</h3>
                   <p className="text-gray-500 text-sm mb-3 text-right line-clamp-2">{repo.description}</p>
@@ -333,10 +352,13 @@ const [, navigate] = useLocation();
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
                       style={{ background: "linear-gradient(135deg,#3730a3,#7c3aed)" }}>
-                      {(rev.reviewerName ?? rev.reviewer_name ?? rev.user?.name ?? "ز").charAt(0)}
+                      {(rev.reviewerName ?? "م").charAt(0)}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-800 text-sm">{rev.reviewerName ?? rev.reviewer_name ?? rev.user?.name ?? "زائر"}</p>
+                      {/* Backend now always returns a safe display name — either what the
+                          reviewer typed, or "مستخدم مجهول" if they left it blank — never
+                          the real account name pulled from a user relation. */}
+                      <p className="font-semibold text-gray-800 text-sm">{rev.reviewerName ?? "مستخدم مجهول"}</p>
                       <div className="flex gap-0.5 mt-0.5">
                         {[1,2,3,4,5].map((s) => (
                           <Star key={s} size={12} fill={s <= rev.rating ? "#f59e0b" : "none"}

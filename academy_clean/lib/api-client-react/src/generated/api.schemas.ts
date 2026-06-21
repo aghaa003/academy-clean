@@ -392,9 +392,12 @@ export type UserStatsCategoriesBreakdownItem = {
 export interface UserStats {
   userId: string;
   solvedChallenges: number;
+  challengesInProgress: number;
   totalPoints: number;
   globalRank: number;
   coursesEnrolled: number;
+  coursesCompleted: number;
+  videoWatchedSeconds: number;
   repositoriesCreated: number;
   categoriesBreakdown: UserStatsCategoriesBreakdownItem[];
 }

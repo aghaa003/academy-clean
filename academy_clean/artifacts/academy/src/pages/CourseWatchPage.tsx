@@ -10,6 +10,7 @@ import {
   Volume2, VolumeX, Maximize2, FileText, Paperclip, Star
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 const API = BASE;
@@ -317,13 +318,23 @@ export default function CourseWatchPage() {
   const canModerateComments =
     !!user && (user.role === "admin" || user.role === "employer" || user.id === courseCreatorId);
 
-  const handleDeleteComment = async (commentId: number) => {
-    if (!activeLesson) return;
-    if (!confirm("حذف هذا التعليق؟")) return;
-    const res = await apiFetch(`/api/lessons/${activeLesson.id}/comments/${commentId}`, { method: "DELETE" });
-    if (res.ok) {
-      // Drop the comment and any of its replies.
-      setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+  const [commentToDelete, setCommentToDelete] = useState<number | null>(null);
+  const [deletingComment, setDeletingComment] = useState(false);
+
+  const handleDeleteComment = (commentId: number) => setCommentToDelete(commentId);
+
+  const confirmDeleteComment = async () => {
+    if (!activeLesson || commentToDelete == null) return;
+    setDeletingComment(true);
+    try {
+      const res = await apiFetch(`/api/lessons/${activeLesson.id}/comments/${commentToDelete}`, { method: "DELETE" });
+      if (res.ok) {
+        // Drop the comment and any of its replies.
+        setComments((prev) => prev.filter((c) => c.id !== commentToDelete && c.parentId !== commentToDelete));
+      }
+    } finally {
+      setDeletingComment(false);
+      setCommentToDelete(null);
     }
   };
 
@@ -786,6 +797,16 @@ export default function CourseWatchPage() {
       </main>
 
       <div className="pb-6" />
+
+      <ConfirmDialog
+        open={commentToDelete != null}
+        onOpenChange={(open) => { if (!open) setCommentToDelete(null); }}
+        title="حذف هذا التعليق؟"
+        description="لا يمكن التراجع عن هذا الإجراء، وسيتم حذف أي ردود على هذا التعليق أيضاً."
+        confirmLabel="حذف"
+        loading={deletingComment}
+        onConfirm={confirmDeleteComment}
+      />
     </div>
   );
 }

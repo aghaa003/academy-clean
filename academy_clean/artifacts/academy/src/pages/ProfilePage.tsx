@@ -2,13 +2,15 @@ import { useEffect, useCallback, useMemo, useRef, useState, type ChangeEvent } f
 import { useCurrentUser } from "@/lib/auth-context";
 import { Link } from "wouter";
 import Footer from "@/components/layout/Footer";
-import { useGetUserStats, useGetLeaderboard, useListCourses } from "@workspace/api-client-react";
+import { useGetUserStats, useGetLeaderboard, useListCourses, getGetFeaturedRepositoriesQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Camera, ChevronDown, Trophy, BookOpen, Code2,
   Star, BarChart2, Shield, User, FolderGit2, Plus, ExternalLink, Loader2, Globe, Trash2,
   Pencil, Download, Save, X, PlayCircle,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Tab = "personal" | "courses" | "dashboard" | "settings" | "projects";
 
@@ -38,6 +40,7 @@ const validateFiles = (files: File[], allowedExtensions: string[]): string | nul
 
 export default function ProfilePage() {
   const { user, signOut } = useCurrentUser();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName, setLastName] = useState(user?.lastName ?? "");
@@ -51,6 +54,24 @@ export default function ProfilePage() {
     "حللت تحدياً برمجياً",
     "نشرت مشروعاً جديداً",
   ]);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setDeleteAccountLoading(true);
+    try {
+      const res = await apiFetch("/api/users/me", { method: "DELETE" });
+      if (res.ok) {
+        await signOut();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d?.error ?? "تعذّر حذف الحساب");
+      }
+    } finally {
+      setDeleteAccountLoading(false);
+      setDeleteAccountOpen(false);
+    }
+  };
   const [saved, setSaved] = useState(false);
   const [coursesOpen, setCoursesOpen] = useState(false);
   const [repos, setRepos] = useState<any[]>([]);
@@ -68,6 +89,7 @@ export default function ProfilePage() {
   const [newRepoIsPublic, setNewRepoIsPublic] = useState(true);
   const [avatarStamp, setAvatarStamp] = useState(0);
   const [deletingRepoId, setDeletingRepoId] = useState<number | null>(null);
+  const [repoToDelete, setRepoToDelete] = useState<number | null>(null);
   const [editingRepoId, setEditingRepoId] = useState<number | null>(null);
   const [editRepoTitle, setEditRepoTitle] = useState("");
   const [editRepoDesc, setEditRepoDesc] = useState("");
@@ -76,6 +98,13 @@ export default function ProfilePage() {
   const [editRepoLive, setEditRepoLive] = useState("");
   const [editRepoIsPublic, setEditRepoIsPublic] = useState(true);
   const [savingRepoEdit, setSavingRepoEdit] = useState(false);
+  // File management for an existing repo being edited — separate from the
+  // "create repo" upload state below, since this edits files already saved
+  // on a repository rather than ones being attached for the first time.
+  const [editRepoCodeFiles, setEditRepoCodeFiles] = useState<string[]>([]);
+  const [editRepoPdfFiles, setEditRepoPdfFiles] = useState<string[]>([]);
+  const [editRepoNewCodeFile, setEditRepoNewCodeFile] = useState<File | null>(null);
+  const [editRepoNewPdfFile, setEditRepoNewPdfFile] = useState<File | null>(null);
   const [newRepoCoverImage, setNewRepoCoverImage] = useState<File | null>(null);
   const [newRepoCoverImagePreview, setNewRepoCoverImagePreview] = useState<string>("");
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -150,15 +179,16 @@ useEffect(() => {
   const leaderboard = leaderboardData ?? [];
   const userRank = leaderboard.findIndex((entry) => entry.user?.username === user?.username) + 1;
 
-  const stats = (statsData ?? {
-    points: 0,
+  const stats = statsData ?? {
+    totalPoints: 0,
     coursesCompleted: 0,
-    challengesSolved: 0,
-    totalSubmissions: 0,
-  }) as { points: number; coursesCompleted: number; challengesSolved: number; totalSubmissions: number };
-  const points = stats.points;
-  const watchedMinutes = useMemo(() => Math.max(0, Math.round(stats.totalSubmissions * 7.5)), [stats.totalSubmissions]);
-  const inProgressChallenges = Math.max(0, stats.totalSubmissions - stats.challengesSolved);
+    solvedChallenges: 0,
+    challengesInProgress: 0,
+    videoWatchedSeconds: 0,
+  };
+  const points = stats.totalPoints;
+  const watchedMinutes = useMemo(() => Math.round((stats.videoWatchedSeconds ?? 0) / 60), [stats.videoWatchedSeconds]);
+  const inProgressChallenges = stats.challengesInProgress ?? 0;
 
   const initials = (user?.firstName?.charAt(0) ?? "") + (user?.lastName?.charAt(0) ?? "");
   const email = user?.emailAddresses[0]?.emailAddress ?? "";
@@ -281,15 +311,22 @@ const res = await apiFetch("/api/upload", { method: "POST", body: form });
     if (activeTab === "projects") fetchRepos();
   }, [activeTab, fetchRepos]);
 
-  const handleDeleteRepo = async (repoId: number) => {
-    if (!window.confirm("هل أنت متأكد من حذف هذا المشروع؟ لا يمكن التراجع عن هذا الإجراء.")) return;
+  const handleDeleteRepo = (repoId: number) => setRepoToDelete(repoId);
+
+  const confirmDeleteRepo = async () => {
+    if (repoToDelete == null) return;
+    const repoId = repoToDelete;
     setDeletingRepoId(repoId);
     try {
-    const res = await apiFetch(`/api/repositories/${repoId}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/repositories/${repoId}`, { method: "DELETE" });
 
       if (res.ok) {
         setRepos((prev) => prev.filter((r) => r.id !== repoId));
         setActivityLogs((prev) => ["تم حذف مشروع", ...prev].slice(0, 5));
+        // The home page's featured-repos list is cached via React Query and was
+        // never invalidated by this raw apiFetch call — without this, a deleted
+        // repo kept showing there until an unrelated refetch happened to occur.
+        queryClient.invalidateQueries({ queryKey: getGetFeaturedRepositoriesQueryKey() });
       } else {
         alert("فشل حذف المشروع، يرجى المحاولة مجدداً");
       }
@@ -297,6 +334,7 @@ const res = await apiFetch("/api/upload", { method: "POST", body: form });
       alert("حدث خطأ أثناء الحذف");
     } finally {
       setDeletingRepoId(null);
+      setRepoToDelete(null);
     }
   };
 
@@ -317,13 +355,55 @@ const res = await apiFetch("/api/upload", { method: "POST", body: form });
     setEditRepoUrl(repo.repoUrl ?? "");
     setEditRepoLive(repo.liveDemoUrl ?? "");
     setEditRepoIsPublic(!!repo.isPublic);
+    setEditRepoCodeFiles(repo.codeFilesUrls ?? []);
+    setEditRepoPdfFiles(repo.pdfFilesUrls ?? []);
+    setEditRepoNewCodeFile(null);
+    setEditRepoNewPdfFile(null);
   };
 
   const handleCancelEditRepo = () => setEditingRepoId(null);
 
+  const handleRemoveEditRepoFile = (kind: "code" | "pdf", url: string) => {
+    if (kind === "code") setEditRepoCodeFiles((prev) => prev.filter((u) => u !== url));
+    else setEditRepoPdfFiles((prev) => prev.filter((u) => u !== url));
+  };
+
   const handleSaveRepoEdit = async (repoId: number) => {
     setSavingRepoEdit(true);
     try {
+      let codeFilesUrls = [...editRepoCodeFiles];
+      let pdfFilesUrls = [...editRepoPdfFiles];
+
+      if (editRepoNewCodeFile) {
+        const form = new FormData();
+        form.append("file", editRepoNewCodeFile);
+        const upRes = await apiFetch("/api/upload", { method: "POST", body: form });
+        if (upRes.ok) {
+          const upData = await upRes.json() as { file?: { url: string }; url?: string };
+          const url = upData.file?.url ?? upData.url;
+          if (url) codeFilesUrls = [...codeFilesUrls, url];
+        } else {
+          alert("فشل رفع ملف الكود، يرجى المحاولة مجدداً.");
+          setSavingRepoEdit(false);
+          return;
+        }
+      }
+
+      if (editRepoNewPdfFile) {
+        const form = new FormData();
+        form.append("file", editRepoNewPdfFile);
+        const upRes = await apiFetch("/api/upload", { method: "POST", body: form });
+        if (upRes.ok) {
+          const upData = await upRes.json() as { file?: { url: string }; url?: string };
+          const url = upData.file?.url ?? upData.url;
+          if (url) pdfFilesUrls = [...pdfFilesUrls, url];
+        } else {
+          alert("فشل رفع ملف PDF، يرجى المحاولة مجدداً.");
+          setSavingRepoEdit(false);
+          return;
+        }
+      }
+
       const res = await apiFetch(`/api/repositories/${repoId}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -333,15 +413,20 @@ const res = await apiFetch("/api/upload", { method: "POST", body: form });
           repoUrl: editRepoUrl.trim() || null,
           liveDemoUrl: editRepoLive.trim() || null,
           isPublic: editRepoIsPublic,
+          codeFilesUrls,
+          pdfFilesUrls,
         }),
       });
-      if (!res.ok) throw new Error("update failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(err?.error ?? "update failed");
+      }
       const updated = await res.json();
       setRepos((prev) => prev.map((r) => (r.id === repoId ? { ...r, ...updated } : r)));
       setEditingRepoId(null);
       setActivityLogs((prev) => ["تم تحديث بيانات المشروع", ...prev].slice(0, 5));
-    } catch {
-      alert("فشل تحديث المشروع، يرجى المحاولة مجدداً");
+    } catch (e: any) {
+      alert(e?.message && e.message !== "update failed" ? e.message : "فشل تحديث المشروع، يرجى المحاولة مجدداً");
     } finally {
       setSavingRepoEdit(false);
     }
@@ -545,8 +630,8 @@ const repoRes = await apiFetch("/api/repositories", {
 
               <div className="flex gap-5 sm:gap-8 mt-5 flex-row-reverse flex-wrap">
                 {[
-                  { label: "نقطة", value: stats.points ?? 0, icon: <Star size={14} className="text-amber-300" /> },
-                  { label: "تحدي محلول", value: (stats as any).challengesSolved ?? 0, icon: <Code2 size={14} className="text-cyan-300" /> },
+                  { label: "نقطة", value: stats.totalPoints ?? 0, icon: <Star size={14} className="text-amber-300" /> },
+                  { label: "تحدي محلول", value: stats.solvedChallenges ?? 0, icon: <Code2 size={14} className="text-cyan-300" /> },
                   { label: "التصنيف العالمي", value: userRank > 0 ? `#${userRank}` : "—", icon: <Trophy size={14} className="text-purple-300" /> },
                 ].map((s) => (
                   <div key={s.label} className="text-center">
@@ -595,8 +680,8 @@ const repoRes = await apiFetch("/api/repositories", {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
                     { label: "إجمالي النقاط", value: points, color: "#3730a3", bg: "#ede9fe" },
-                    { label: "التحديات المحلولة", value: (stats as any).challengesSolved ?? 0, color: "#0891b2", bg: "#e0f2fe" },
-                    { label: "الكورسات المكتملة", value: (stats as any).coursesCompleted ?? 0, color: "#16a34a", bg: "#dcfce7" },
+                    { label: "التحديات المحلولة", value: stats.solvedChallenges ?? 0, color: "#0891b2", bg: "#e0f2fe" },
+                    { label: "الكورسات المكتملة", value: stats.coursesCompleted ?? 0, color: "#16a34a", bg: "#dcfce7" },
                     { label: "التصنيف العالمي", value: userRank > 0 ? `#${userRank}` : "—", color: "#dc2626", bg: "#fee2e2" },
                   ].map((s) => (
                     <div
@@ -1224,6 +1309,48 @@ const repoRes = await apiFetch("/api/repositories", {
                               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:ring-2 focus:ring-indigo-400"
                               data-testid={`input-edit-live-${repo.id}`}
                             />
+
+                            {/* Manage individual files — separate from the main info above */}
+                            <div className="border border-gray-200 rounded-lg p-2.5 space-y-2">
+                              <p className="text-xs font-semibold text-gray-600">📁 ملفات الكود</p>
+                              {editRepoCodeFiles.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {editRepoCodeFiles.map((url) => (
+                                    <span key={url} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 rounded-full px-2 py-1">
+                                      <a href={url} download target="_blank" rel="noreferrer" className="underline">{url.split("/").pop()}</a>
+                                      <button type="button" onClick={() => handleRemoveEditRepoFile("code", url)} className="text-indigo-400 hover:text-red-500">
+                                        <X size={11} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                                <span className="rounded-full px-2.5 py-1 bg-gray-100 hover:bg-gray-200">+ إضافة ملف كود</span>
+                                {editRepoNewCodeFile && <span className="text-indigo-600">{editRepoNewCodeFile.name}</span>}
+                                <input type="file" className="hidden" onChange={(e) => setEditRepoNewCodeFile(e.target.files?.[0] ?? null)} />
+                              </label>
+
+                              <p className="text-xs font-semibold text-gray-600 pt-1">📄 ملفات PDF</p>
+                              {editRepoPdfFiles.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {editRepoPdfFiles.map((url) => (
+                                    <span key={url} className="flex items-center gap-1 text-xs bg-rose-50 text-rose-600 rounded-full px-2 py-1">
+                                      <a href={url} download target="_blank" rel="noreferrer" className="underline">{url.split("/").pop()}</a>
+                                      <button type="button" onClick={() => handleRemoveEditRepoFile("pdf", url)} className="text-rose-400 hover:text-red-600">
+                                        <X size={11} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                                <span className="rounded-full px-2.5 py-1 bg-gray-100 hover:bg-gray-200">+ إضافة ملف PDF</span>
+                                {editRepoNewPdfFile && <span className="text-rose-600">{editRepoNewPdfFile.name}</span>}
+                                <input type="file" accept=".pdf" className="hidden" onChange={(e) => setEditRepoNewPdfFile(e.target.files?.[0] ?? null)} />
+                              </label>
+                            </div>
+
                             <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                               <div className="flex gap-2">
                                 <button type="button" onClick={() => setEditRepoIsPublic(true)}
@@ -1355,12 +1482,44 @@ const repoRes = await apiFetch("/api/repositories", {
                       <span className="text-sm text-gray-700 font-medium">معرّف الحساب (ID)</span>
                     </div>
                   </div>
+
+                  <div className="flex items-center justify-between p-4 border border-red-100 bg-red-50/40 rounded-xl">
+                    <button
+                      onClick={() => setDeleteAccountOpen(true)}
+                      className="flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700"
+                      data-testid="button-delete-account"
+                    >
+                      <Trash2 size={14} />
+                      حذف الحساب
+                    </button>
+                    <span className="text-sm text-red-700 font-medium">حذف حسابك بشكل نهائي من تسجيل الدخول</span>
+                  </div>
                 </div>
               </div>
             )}
           </div>
         </div>
       </main>
+
+      <ConfirmDialog
+        open={deleteAccountOpen}
+        onOpenChange={setDeleteAccountOpen}
+        title="حذف الحساب؟"
+        description="سيتم تسجيل خروجك فوراً ولن تتمكن من تسجيل الدخول مرة أخرى بهذا الحساب. هذا الإجراء غير قابل للتراجع من قبلك."
+        confirmLabel="حذف الحساب"
+        loading={deleteAccountLoading}
+        onConfirm={handleDeleteAccount}
+      />
+
+      <ConfirmDialog
+        open={repoToDelete != null}
+        onOpenChange={(open) => { if (!open) setRepoToDelete(null); }}
+        title="حذف هذا المشروع؟"
+        description="لا يمكن التراجع عن هذا الإجراء، وسيُحذف المشروع من ملفك الشخصي وأي مكان آخر يظهر فيه."
+        confirmLabel="حذف"
+        loading={deletingRepoId != null}
+        onConfirm={confirmDeleteRepo}
+      />
 
       <Footer />
     </div>

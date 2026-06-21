@@ -54,6 +54,34 @@ import { apiFetch } from "@/lib/api-fetch";
     const searchContainerRef = useRef<HTMLDivElement | null>(null);
     const debouncedQuery = useDebounce(searchQuery, 300);
 
+    // Recent search history — last 10 terms, stored client-side, scoped to the
+    // signed-in user's id so one account can never see or clear another
+    // account's history on a shared browser.
+    const recentSearchesKey = `academy_recent_searches_${user?.id ?? "guest"}`;
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    useEffect(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(recentSearchesKey) ?? "[]");
+        setRecentSearches(Array.isArray(saved) ? saved.filter((s) => typeof s === "string").slice(0, 10) : []);
+      } catch {
+        setRecentSearches([]);
+      }
+    }, [recentSearchesKey]);
+    const persistRecentSearches = (list: string[]) => {
+      setRecentSearches(list);
+      try { localStorage.setItem(recentSearchesKey, JSON.stringify(list)); } catch { /* ignore */ }
+    };
+    const addRecentSearch = (term: string) => {
+      const trimmed = term.trim();
+      if (trimmed.length < 2) return;
+      const next = [trimmed, ...recentSearches.filter((s) => s.toLowerCase() !== trimmed.toLowerCase())].slice(0, 10);
+      persistRecentSearches(next);
+    };
+    const removeRecentSearch = (term: string) => {
+      persistRecentSearches(recentSearches.filter((s) => s !== term));
+    };
+    const clearRecentSearches = () => persistRecentSearches([]);
+
     // Notification state
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifList, setNotifList] = useState<any[]>([]);
@@ -94,7 +122,11 @@ import { apiFetch } from "@/lib/api-fetch";
         case "post_comment":
           return "/community";
         case "course_review":
+        case "course_completed":
           return n.entityId ? `/courses/${n.entityId}` : null;
+        case "repo_like":
+        case "repo_rating":
+          return "/profile";
         default:
           return null;
       }
@@ -137,7 +169,11 @@ import { apiFetch } from "@/lib/api-fetch";
     const isActive = (href: string) => location === href;
     const userEmail = user?.emailAddresses?.[0]?.emailAddress ?? (user as any)?.email ?? "";
     const isAdmin = user?.role === "admin" || userEmail.includes("admin");
+    const isEmployer = user?.role === "employer";
     const isCreator = user?.role === "creator";
+    // Employers reach the same /admin page (with reduced permissions inside
+    // it) as admins — they need the same navbar entry point, not a manual URL.
+    const canSeeAdminPanel = isAdmin || isEmployer;
     const initials = (user?.firstName?.charAt(0) ?? "") + (user?.lastName?.charAt(0) ?? "");
     const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "مستخدم";
 
@@ -280,7 +316,7 @@ import { apiFetch } from "@/lib/api-fetch";
                             <PenSquare size={15} />لوحة صانع المحتوى
                           </Link>
                         )}
-                        {isAdmin && (
+                        {canSeeAdminPanel && (
                           <Link href="/admin" onClick={() => setUserMenuOpen(false)}
                             className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-purple-700 hover:bg-purple-50"
                             data-testid="menu-admin">
@@ -327,6 +363,7 @@ import { apiFetch } from "@/lib/api-fetch";
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
                     onFocus={() => setSearchOpen(true)}
+                    onKeyDown={(e) => { if (e.key === "Enter") addRecentSearch(searchQuery); }}
                     placeholder="ابحث عن كورسات أو منشئين..."
                     className="bg-transparent text-white placeholder-white/50 text-sm outline-none w-full text-right"
                     data-testid="input-search"
@@ -337,6 +374,36 @@ import { apiFetch } from "@/lib/api-fetch";
                     </button>
                   )}
                 </div>
+
+                {/* Recent searches — shown while the box is focused but no query (or too short) is typed yet */}
+                {searchOpen && !showDropdown && recentSearches.length > 0 && (
+                  <div className="absolute top-full right-0 mt-1 bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 z-[9999] overflow-hidden">
+                    <div className="px-4 py-2 flex items-center justify-between border-b border-gray-50">
+                      <button onClick={clearRecentSearches} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                        مسح الكل
+                      </button>
+                      <span className="text-xs font-semibold text-gray-400">عمليات البحث الأخيرة</span>
+                    </div>
+                    {recentSearches.map((term) => (
+                      <div key={term} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-indigo-50 group">
+                        <button
+                          onClick={() => removeRecentSearch(term)}
+                          className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          aria-label="حذف"
+                        >
+                          <X size={13} />
+                        </button>
+                        <button
+                          onClick={() => { setSearchQuery(term); setSearchOpen(true); }}
+                          className="flex-1 text-right text-sm text-gray-700 flex items-center gap-2 justify-end"
+                        >
+                          {term}
+                          <Search size={12} className="text-gray-400" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Search results dropdown */}
                 {showDropdown && (
@@ -353,7 +420,7 @@ import { apiFetch } from "@/lib/api-fetch";
                         {searchResults.courses.map((c) => (
                           <button
                             key={c.id}
-                            onClick={() => { navigate("/courses"); setSearchOpen(false); setSearchQuery(""); }}
+                            onClick={() => { addRecentSearch(debouncedQuery); navigate("/courses"); setSearchOpen(false); setSearchQuery(""); }}
                             className="w-full text-right px-4 py-2.5 hover:bg-indigo-50 flex items-center gap-3"
                             data-testid={`search-course-${c.id}`}
                           >
@@ -374,7 +441,7 @@ import { apiFetch } from "@/lib/api-fetch";
                         {searchResults.users.map((u) => (
                           <button
                             key={u.id}
-                            onClick={() => { navigate(`/users/${u.id}`); setSearchOpen(false); setSearchQuery(""); }}
+                            onClick={() => { addRecentSearch(debouncedQuery); navigate(`/users/${u.id}`); setSearchOpen(false); setSearchQuery(""); }}
                             className="w-full text-right px-4 py-2.5 hover:bg-indigo-50 flex items-center gap-3"
                             data-testid={`search-user-${u.id}`}
                           >
@@ -398,7 +465,7 @@ import { apiFetch } from "@/lib/api-fetch";
                         {searchResults.repositories.map((r) => (
                           <button
                             key={r.id}
-                            onClick={() => { if (r.owner?.id) navigate(`/users/${r.owner.id}`); setSearchOpen(false); setSearchQuery(""); }}
+                            onClick={() => { addRecentSearch(debouncedQuery); if (r.owner?.id) navigate(`/users/${r.owner.id}`); setSearchOpen(false); setSearchQuery(""); }}
                             className="w-full text-right px-4 py-2.5 hover:bg-indigo-50 flex items-center gap-3"
                             data-testid={`search-repo-${r.id}`}
                           >
@@ -533,7 +600,7 @@ import { apiFetch } from "@/lib/api-fetch";
                       لوحة صانع المحتوى
                     </Link>
                   )}
-                  {isAdmin && (
+                  {canSeeAdminPanel && (
                     <Link href="/admin" className="block py-2.5 px-3 rounded-xl text-right text-purple-300 hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                       لوحة التحكم
                     </Link>

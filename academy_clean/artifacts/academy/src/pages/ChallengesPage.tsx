@@ -100,7 +100,9 @@ const DIFFICULTY_MAP: Record<string, { label: string; bg: string; text: string }
 const AVATAR_COLORS = ["#3730a3", "#7c3aed", "#0891b2", "#16a34a", "#e11d48"];
 const RANK_COLORS = ["#f59e0b", "#94a3b8", "#cd7c2a"];
 
-const MY_CHALLENGES_KEY = "academy_my_challenges";
+// Scoped per signed-in user — otherwise one account's local cache of solved
+// challenges bleeds into whichever account next uses the same browser.
+const myChallengesKey = (userId: string | null | undefined) => `academy_my_challenges_${userId ?? "guest"}`;
 
 interface MyChallenge {
   challengeId: string | number;
@@ -111,13 +113,13 @@ interface MyChallenge {
   isPublic: boolean;
 }
 
-function loadMyChallenges(): MyChallenge[] {
-  try { return JSON.parse(localStorage.getItem(MY_CHALLENGES_KEY) ?? "[]"); }
+function loadMyChallenges(userId: string | null | undefined): MyChallenge[] {
+  try { return JSON.parse(localStorage.getItem(myChallengesKey(userId)) ?? "[]"); }
   catch { return []; }
 }
 
-function saveMyChallenges(list: MyChallenge[]) {
-  localStorage.setItem(MY_CHALLENGES_KEY, JSON.stringify(list));
+function saveMyChallenges(userId: string | null | undefined, list: MyChallenge[]) {
+  localStorage.setItem(myChallengesKey(userId), JSON.stringify(list));
 }
 
 function readFileAsText(file: File): Promise<string> {
@@ -146,6 +148,7 @@ export default function ChallengesPage() {
 const [hintLoading, setHintLoading] = useState(false);
 const [hintText, setHintText]       = useState<string | null>(null);
 const [hintMermaid, setHintMermaid] = useState<string | null>(null);
+const [hintDiagramType, setHintDiagramType] = useState<"mistake" | "solution">("solution");
   const [activeChallenge, setActiveChallenge] = useState<any | null>(null);
   const [detailChallenge, setDetailChallenge] = useState<any | null>(null);
   const [solution, setSolution] = useState("");
@@ -154,7 +157,8 @@ const [hintMermaid, setHintMermaid] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
-  const [myChallenges, setMyChallenges] = useState<MyChallenge[]>(loadMyChallenges);
+  const [myChallenges, setMyChallenges] = useState<MyChallenge[]>(() => loadMyChallenges(user?.id));
+  useEffect(() => { setMyChallenges(loadMyChallenges(user?.id)); }, [user?.id]);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 const [mySubmissions, setMySubmissions] = useState<any[]>([]);
@@ -289,7 +293,7 @@ useEffect(() => {
               },
             ];
         setMyChallenges(updated);
-        saveMyChallenges(updated);
+        saveMyChallenges(user?.id, updated);
       }
 
       // Submit to backend — handles points, deduplication, and leaderboard update
@@ -346,14 +350,19 @@ const getHint = async () => {
     });
 
     if (res.ok) {
-      const data = await res.json() as { hint?: string; mermaid?: string; ai_response?: string };
+      const data = await res.json() as { hint?: string; mermaid?: string; ai_response?: string; diagramType?: "mistake" | "solution" };
       setHintText(data.hint ?? data.ai_response ?? null);
       setHintMermaid(data.mermaid ?? null);
+      setHintDiagramType(data.diagramType ?? (solution.trim() ? "mistake" : "solution"));
     }
   } catch { /* silent */ }
   finally { setHintLoading(false); }
 };
-  const isSolved = (id: string | number) => myChallenges.some((c) => c.challengeId === id && c.score >= 60);
+  // ✅ Fixed: derive "solved" from the backend's per-user submissions (mySubmissions,
+  // scoped server-side by Auth::id()) instead of the local academy_my_challenges
+  // cache, which was shared across any account that had ever used this browser.
+  const isSolved = (id: string | number) =>
+    mySubmissions.some((s: any) => s.success && (s.challenge?.id === id || s.challenge_id === id));
 
   return (
     <div className="min-h-screen flex flex-col" dir="rtl">
@@ -828,7 +837,9 @@ const getHint = async () => {
     {hintText && <p>🔍 {hintText}</p>}
     {hintMermaid && (
       <div className="bg-white rounded-lg border border-indigo-100 p-3">
-        <div className="text-xs text-indigo-400 mb-2 font-semibold">مخطط الحل الصحيح</div>
+        <div className="text-xs text-indigo-400 mb-2 font-semibold">
+          {hintDiagramType === "mistake" ? "مخطط يوضح أين أخطأت" : "مخطط الحل الصحيح"}
+        </div>
         <MermaidDiagram chart={hintMermaid} />
       </div>
     )}
