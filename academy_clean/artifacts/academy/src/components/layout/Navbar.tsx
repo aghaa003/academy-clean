@@ -60,6 +60,10 @@ import { apiFetch } from "@/lib/api-fetch";
     const recentSearchesKey = `academy_recent_searches_${user?.id ?? "guest"}`;
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
     useEffect(() => {
+      // One-time cleanup of the legacy unscoped key from before per-user scoping
+      // existed — it could belong to a different account than whoever's logged in
+      // on this browser now, so it's deleted rather than migrated into the new key.
+      try { localStorage.removeItem("academy_recent_searches"); } catch { /* ignore */ }
       try {
         const saved = JSON.parse(localStorage.getItem(recentSearchesKey) ?? "[]");
         setRecentSearches(Array.isArray(saved) ? saved.filter((s) => typeof s === "string").slice(0, 10) : []);
@@ -167,8 +171,7 @@ import { apiFetch } from "@/lib/api-fetch";
     const closeCourses = () => { coursesTimerRef.current = setTimeout(() => setCoursesOpen(false), 220); };
 
     const isActive = (href: string) => location === href;
-    const userEmail = user?.emailAddresses?.[0]?.emailAddress ?? (user as any)?.email ?? "";
-    const isAdmin = user?.role === "admin" || userEmail.includes("admin");
+    const isAdmin = user?.role === "admin";
     const isEmployer = user?.role === "employer";
     const isCreator = user?.role === "creator";
     // Employers reach the same /admin page (with reduced permissions inside

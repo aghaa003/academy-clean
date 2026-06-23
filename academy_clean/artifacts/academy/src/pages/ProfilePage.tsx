@@ -1268,6 +1268,11 @@ const repoRes = await apiFetch("/api/repositories", {
                             {repo.description && (
                               <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{repo.description}</p>
                             )}
+                            <div className="flex items-center justify-end gap-1 mt-1.5 text-amber-500 text-xs font-semibold">
+                              <Star size={12} className="fill-amber-400 text-amber-400" />
+                              {repo.averageRating > 0 ? repo.averageRating.toFixed(1) : "—"}
+                              <span className="text-gray-400 font-normal">({repo.ratingsCount ?? 0} تقييم)</span>
+                            </div>
                           </div>
                         </div>
 

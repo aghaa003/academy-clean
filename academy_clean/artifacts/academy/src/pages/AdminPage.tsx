@@ -8,6 +8,7 @@ import {
   useListChallenges,
   useCreateCourse,
   useUpdateUser,
+  useGetPlatformStats,
 } from "@workspace/api-client-react";
 import {
   Users, BookOpen, ShieldCheck, Plus, X, Pencil, ChevronDown,
@@ -233,7 +234,6 @@ export default function AdminPage() {
   const [reviews, setReviews] = useState<ReviewModeration[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewSearch, setReviewSearch] = useState("");
-  const [bannedUsers, setBannedUsers] = useState<Set<string>>(new Set());
 
   // Admin user-detail modal (profile + challenge/assignment answers & scores)
   type AdminUserDetail = {
@@ -324,8 +324,14 @@ export default function AdminPage() {
   const [editAssignmentError, setEditAssignmentError] = useState("");
 
   const { data: usersData, refetch: refetchUsers } = useListUsers({ limit: 200 });
-  const { data: coursesData, refetch: refetchCourses } = useListCourses();
-  const { data: challengesData, refetch: refetchChallenges } = useListChallenges({ limit: 100 });
+  // /api/users is admin-only (403 for employer), so usersData stays undefined for
+  // employers — fall back to the always-accessible platform-wide stats endpoint
+  // instead of silently showing "0 مستخدم".
+  const { data: platformStats } = useGetPlatformStats();
+  // include_inactive=1 so admin sees disabled courses/challenges too — otherwise
+  // toggling one inactive makes it vanish from this page with no way to re-enable it.
+  const { data: coursesData, refetch: refetchCourses } = useListCourses({ include_inactive: 1 } as any);
+  const { data: challengesData, refetch: refetchChallenges } = useListChallenges({ limit: 100, include_inactive: 1 } as any);
 
   const createCourse = useCreateCourse();
   const createChallenge = useCreateChallenge();
@@ -794,28 +800,32 @@ const res = await apiFetch(`/api/admin/reviews/${reviewId}/reject`, {
     } catch { /* silent */ }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
+  const handleDeleteComment = async (commentId: string, commentType?: "lesson" | "community") => {
     try {
-const res = await apiFetch(`/api/admin/comments/${commentId}`, {
-  method: "DELETE",
-});      if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
+      // Lesson and community comments have independent ids that collide in the
+      // merged list — the type-aware route avoids deleting the wrong row when two
+      // comments from different sources share the same numeric id.
+      const url = commentType
+        ? `/api/admin/comments/${commentType}/${commentId}`
+        : `/api/admin/comments/${commentId}`;
+      const res = await apiFetch(url, { method: "DELETE" });
+      if (res.ok) setComments((prev) => prev.filter((c) => !(c.id === commentId && (c as any).type === commentType)));
     } catch { /* silent */ }
   };
 
   const handleBanUser = async (userId: string | null) => {
     if (!userId) return;
     try {
-      const isBanned = bannedUsers.has(userId);
+      const current = users.find((u: any) => u.id === userId);
+      const isBanned = !!current?.banned;
       const res = await apiFetch(`/api/admin/users/${userId}/ban`, {
         method: "POST",
         body: JSON.stringify({ banned: !isBanned }),
       });
       if (res.ok) {
-        setBannedUsers((prev) => {
-          const next = new Set(prev);
-          if (isBanned) next.delete(userId); else next.add(userId);
-          return next;
-        });
+        // Reflect the server's persisted state, not a client-only flag that
+        // resets on reload — the table must show who is actually banned.
+        refetchUsers();
       }
     } catch { /* silent */ }
   };
@@ -1089,7 +1099,10 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
         body: JSON.stringify({
           track: projectForm.track,
           title: projectForm.title.trim(),
-          description: projectForm.description.trim() || null,
+          // Backend ProjectController::store validates "desc", not "description"
+          // (the edit path below already uses "desc" correctly) — using the wrong
+          // key here silently dropped every newly-created project's description.
+          desc: projectForm.description.trim() || null,
           difficulty: Number(projectForm.difficulty) || 1,
           tags: projectForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
           category: projectForm.category.trim() || null,
@@ -1295,7 +1308,10 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
 
   const TABS: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
     { key: "overview", label: "نظرة عامة", icon: <BarChart2 size={16} /> },
-    { key: "users", label: "إدارة المستخدمين", icon: <Users size={16} /> },
+    // "users" (full user management — role/ban/score/password) is admin-only on the
+    // backend (role:admin route group); employers get a 403 with no usable actions,
+    // so the tab is hidden for them rather than showing a confusing empty table.
+    ...(isAdmin ? [{ key: "users" as AdminTab, label: "إدارة المستخدمين", icon: <Users size={16} /> }] : []),
     { key: "courses", label: "إدارة الكورسات", icon: <BookOpen size={16} /> },
     { key: "assignments", label: "التكليفات", icon: <FileText size={16} /> },
     { key: "challenges", label: "إدارة التحديات البرمجية", icon: <Trophy size={16} /> },
@@ -1316,7 +1332,10 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
           <ShieldCheck size={28} className="text-amber-400" />
           <h1 className="text-3xl font-extrabold text-white">لوحة التحكم الإدارية</h1>
         </div>
-        <p className="text-indigo-200">مرحباً {user?.firstName ?? "المستخدم"}، أنت تملك صلاحيات كاملة</p>
+        <p className="text-indigo-200">
+          مرحباً {user?.firstName ?? "المستخدم"}،{" "}
+          {isAdmin ? "أنت تملك صلاحيات كاملة" : "لديك صلاحيات إدارة المحتوى (لا تشمل إدارة المستخدمين)"}
+        </p>
       </div>
 
       <div className="max-w-7xl mx-auto w-full px-4 py-8">
@@ -1329,7 +1348,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
         {/* Stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
-            { icon: <Users size={24} className="text-indigo-500" />, value: usersData?.total ?? users.length, label: "مستخدم" },
+            { icon: <Users size={24} className="text-indigo-500" />, value: usersData?.total ?? (platformStats as any)?.totalUsers ?? users.length, label: "مستخدم" },
             { icon: <BookOpen size={24} className="text-teal-500" />, value: coursesData?.total ?? courses.length, label: "كورس" },
             { icon: <Video size={24} className="text-purple-500" />, value: totalLessons, label: "درس" },
             { icon: <Trophy size={24} className="text-amber-500" />, value: challengesData?.total ?? challenges.length, label: "تحدي نشط" },
@@ -1577,7 +1596,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                             </button>
                             <button onClick={() => handleBanUser(u.id)}
                               className="text-xs px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 font-medium">
-                              {bannedUsers.has(u.id) ? "رفع الحظر" : "حظر"}
+                              {u.banned ? "رفع الحظر" : "حظر"}
                             </button>
                             <button onClick={() => handleDeleteUser(u.id)}
                               className="text-xs px-3 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 font-medium">
@@ -2437,10 +2456,10 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
               ) : (
                 <div className="space-y-3">
                   {comments.filter((c) => matches(commentSearch, c.userName, c.courseTitle, c.lessonTitle, c.content)).slice(0, 30).map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-gray-100 p-4">
+                    <div key={`${(item as any).type ?? "comment"}-${item.id}`} className="rounded-2xl border border-gray-100 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <button
-                          onClick={() => void handleDeleteComment(item.id)}
+                          onClick={() => void handleDeleteComment(item.id, (item as any).type)}
                           className="text-xs rounded-full px-3 py-1 font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors shrink-0"
                         >
                           حذف
@@ -2501,7 +2520,7 @@ const res = await apiFetch(`/api/admin/comments/${commentId}`, {
                     <tbody className="divide-y divide-gray-50">
                       {logs.map((log) => {
                         const info = ACTION_LABELS[log.action] ?? { label: log.action, color: "bg-gray-100 text-gray-500" };
-                        const isBanned = log.userId ? bannedUsers.has(log.userId) : false;
+                        const isBanned = log.userId ? !!users.find((u: any) => u.id === log.userId)?.banned : false;
                         const browser = log.userAgent
                           ? (log.userAgent.includes("Firefox") ? "Firefox"
                             : log.userAgent.includes("Chrome") ? "Chrome"

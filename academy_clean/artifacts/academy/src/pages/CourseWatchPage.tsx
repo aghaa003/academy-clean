@@ -678,7 +678,7 @@ export default function CourseWatchPage() {
                               {replyingTo === c.id ? "إلغاء" : "رد"}
                             </button>
                           )}
-                          {(canModerateComments || c.userId === user?.id) && (
+                          {(canModerateComments || (c as any).user_id === user?.id) && (
                             <button
                               onClick={() => handleDeleteComment(c.id)}
                               className="text-xs text-red-400 hover:text-red-300 transition-colors"
@@ -702,7 +702,7 @@ export default function CourseWatchPage() {
                             <span className="text-gray-500 text-xs">{timeAgo(reply.createdAt)}</span>
                           </div>
                           <p className="text-gray-300 text-xs leading-relaxed">{reply.content}</p>
-                          {(canModerateComments || reply.userId === user?.id) && (
+                          {(canModerateComments || (reply as any).user_id === user?.id) && (
                             <button
                               onClick={() => handleDeleteComment(reply.id)}
                               className="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"

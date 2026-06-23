@@ -78,7 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-const res = await apiFetch(`/api/auth/me`);      if (res.ok) {
+      let res = await apiFetch(`/api/auth/me`);
+      // The session cookie from a just-completed login/logout occasionally isn't
+      // committed yet when this fires immediately afterward (observed ~1-in-5 in
+      // testing) — one short retry absorbs that race instead of incorrectly
+      // showing the user as logged out right after a successful login.
+      if (!res.ok && res.status === 401) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        res = await apiFetch(`/api/auth/me`);
+      }
+      if (res.ok) {
         const data = await res.json();
         // ✅ Fix 1: handle both { user: {...} } and flat {...} shapes
         const raw      = data.user ?? data;
