@@ -131,6 +131,15 @@ function readFileAsText(file: File): Promise<string> {
   });
 }
 
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 interface ReviewResult {
   isCorrect: boolean;
   score: number;
@@ -230,7 +239,11 @@ useEffect(() => {
 
   const handleSubmit = async () => {
     let codeToReview = solution.trim();
-    if (!codeToReview && solutionFile) {
+    // An uploaded screenshot of code must go through OCR (the vision model), not
+    // FileReader.readAsText — text-decoding a binary image produces mojibake that
+    // confuses the judge model into timing out instead of grading anything real.
+    const isImageFile = !codeToReview && solutionFile && solutionFile.type.startsWith("image/");
+    if (!codeToReview && solutionFile && !isImageFile) {
       try {
         codeToReview = await readFileAsText(solutionFile);
       } catch {
@@ -238,7 +251,7 @@ useEffect(() => {
       }
     }
 
-    if (!codeToReview) {
+    if (!codeToReview && !isImageFile) {
       setReviewError("الرجاء كتابة حلك أو رفع ملف الحل أولاً.");
       return;
     }
@@ -253,17 +266,28 @@ useEffect(() => {
       let data: ReviewResult;
 
       try {
-        const res = await apiFetch("/api/assignments/review", {
-  method: "POST",
-  body: JSON.stringify({    code: codeToReview,
-            language: lang,
-            problem,
-            problemTitle: activeChallenge.title, }),
-});
-       
+        const res = isImageFile
+          ? await apiFetch("/api/ai/helper-challenges", {
+              method: "POST",
+              body: JSON.stringify({
+                mode: "verify",
+                challenge_id: activeChallenge.id,
+                image: await readFileAsDataURL(solutionFile as File),
+                language: lang,
+                question: problem,
+              }),
+            })
+          : await apiFetch("/api/assignments/review", {
+              method: "POST",
+              body: JSON.stringify({ code: codeToReview, language: lang, problem, problemTitle: activeChallenge.title }),
+            });
+
         if (res.ok) {
-          const json = await res.json() as ReviewResult;
+          const json = await res.json() as ReviewResult & { resolvedCode?: string };
           data = (json && typeof json.score === "number") ? json : clientFallbackEvaluate(codeToReview, lang, problem);
+          // When the solution came from an uploaded image, the OCR'd text only
+          // exists in the response — recover it so the real solution gets saved.
+          if (isImageFile && typeof json.resolvedCode === "string") codeToReview = json.resolvedCode;
         } else {
           data = clientFallbackEvaluate(codeToReview, lang, problem);
         }
@@ -733,13 +757,13 @@ const getHint = async () => {
                     {solutionFile ? (
                       <span className="text-indigo-600 font-semibold">✓ {solutionFile.name}</span>
                     ) : (
-                      "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .html, .zip)"
+                      "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .css, .java, .zip, .txt) أو صورة لكودك"
                     )}
                   </p>
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".py,.js,.ts,.cpp,.c,.cs,.html,.css,.java,.zip,.txt"
+                    accept=".py,.js,.ts,.cpp,.c,.cs,.css,.java,.zip,.txt,image/*"
                     className="hidden"
                     onChange={handleFileChange}
                   />

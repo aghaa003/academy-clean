@@ -1885,7 +1885,7 @@ const res = await apiFetch(`/api/admin/reviews/${reviewId}/reject`, {
                           onClick={() => toggleContentActive("courses", c.id, refetchCourses)}
                           className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 hover:bg-orange-100 font-medium"
                         >
-                          {(c as any).is_active === false ? "تفعيل" : "تعطيل"}
+                          {(c as any).isActive === false ? "تفعيل" : "تعطيل"}
                         </button>
                       </div>
                       <div className="text-right flex-1 mx-4">

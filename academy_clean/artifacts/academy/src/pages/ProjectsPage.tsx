@@ -175,6 +175,15 @@ function readFileAsText(file: File): Promise<string> {
   });
 }
 
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ProjectsPage() {
   const { user } = useCurrentUser();
   const [activeCategory, setActiveCategory] = useState<Category>("basics");
@@ -368,7 +377,11 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
     const lang = String(activeLang);
     const problem = currentAssignment.question ?? "";
     let code = solution.trim();
-    if (!code && solutionFile) {
+    // An uploaded screenshot of code must go through OCR (the vision model), not
+    // FileReader.readAsText — text-decoding a binary image produces mojibake that
+    // confuses the judge model into timing out instead of grading anything real.
+    const isImageFile = !code && solutionFile && solutionFile.type.startsWith("image/");
+    if (!code && solutionFile && !isImageFile) {
       try {
         code = await readFileAsText(solutionFile);
       } catch {
@@ -378,17 +391,27 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
     try {
       let data: ReviewResult;
       try {
-        const res = await apiFetch("/api/assignments/review", {
-  method: "POST",
-  body: JSON.stringify({  code,
-            language: lang,
-            problem,
-            problemTitle: currentAssignment.title,}),
-});
+        const res = isImageFile
+          ? await apiFetch("/api/ai/helper-projects", {
+              method: "POST",
+              body: JSON.stringify({
+                mode: "verify",
+                image: await readFileAsDataURL(solutionFile as File),
+                language: lang,
+                question: problem,
+              }),
+            })
+          : await apiFetch("/api/assignments/review", {
+              method: "POST",
+              body: JSON.stringify({ code, language: lang, problem, problemTitle: currentAssignment.title }),
+            });
 
         if (res.ok) {
-          const json = await res.json() as ReviewResult;
+          const json = await res.json() as ReviewResult & { resolvedCode?: string };
           data = (json && typeof json.score === "number") ? json : projectClientFallback(code, lang, problem);
+          // When the solution came from an uploaded image, the OCR'd text only
+          // exists in the response — recover it so the real solution gets saved.
+          if (isImageFile && typeof json.resolvedCode === "string") code = json.resolvedCode;
         } else {
           data = projectClientFallback(code, lang, problem);
         }
@@ -700,13 +723,13 @@ const getProjectFix = async (code: string, language: string, problem: string) =>
                         {solutionFile ? (
                           <span className="text-indigo-600 font-semibold">✓ {solutionFile.name}</span>
                         ) : (
-                          "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .css, .java, .zip, .txt)"
+                          "انقر لرفع ملف (.py, .js, .ts, .cpp, .c, .cs, .css, .java, .zip, .txt) أو صورة لكودك"
                         )}
                       </p>
                       <input
                         ref={solutionFileRef}
                         type="file"
-                        accept=".py,.js,.ts,.cpp,.c,.cs,.css,.java,.zip,.txt"
+                        accept=".py,.js,.ts,.cpp,.c,.cs,.css,.java,.zip,.txt,image/*"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null;
